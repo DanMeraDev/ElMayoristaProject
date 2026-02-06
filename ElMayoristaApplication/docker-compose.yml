@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: el_mayorista_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: el_mayorista
+      POSTGRES_USER: mayorista_user
+      POSTGRES_PASSWORD: mayorista_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - elmayorista_pgdata:/var/lib/postgresql/data
+
+volumes:
+  elmayorista_pgdata:
