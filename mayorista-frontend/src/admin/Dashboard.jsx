@@ -26,7 +26,8 @@ import {
   XCircle,
   AlertCircle,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Menu
 } from 'lucide-react';
 import { getAllSellers, approveSeller, rejectSeller, getPendingSellers, getSalesUnderReview } from '../api/admin.api';
 import AdminFooter from './components/AdminFooter';
@@ -281,10 +282,19 @@ function Dashboard() {
         {/* Header */}
         <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-4 sm:px-8">
           <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            {/* Mobile hamburger - always visible on mobile */}
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400 md:hidden"
+              title="Abrir menú"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            {/* Desktop toggle - only when sidebar is closed */}
             {!isSidebarOpen && (
               <button
                 onClick={() => setIsSidebarOpen(true)}
-                className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400"
+                className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hidden md:block"
                 title="Mostrar menú"
               >
                 <ChevronRight className="w-5 h-5" />

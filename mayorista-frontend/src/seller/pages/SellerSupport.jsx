@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useDarkMode } from '../../context/DarkModeContext';
 import { MessageSquare, Bug, Lightbulb, Send, Filter, CheckCircle, Clock, XCircle, Moon, Sun, Bell, ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
 import SellerSidebar from '../components/SellerSidebar';
+import SellerFooter from '../components/SellerFooter';
 import { createTicket, getMyTickets } from '../../api/support.api';
 
 const SellerSupport = () => {
@@ -343,6 +344,9 @@ const SellerSupport = () => {
                             )}
                         </div>
                     </div>
+
+                    {/* Footer */}
+                    <SellerFooter />
                 </main>
             </div>
 
