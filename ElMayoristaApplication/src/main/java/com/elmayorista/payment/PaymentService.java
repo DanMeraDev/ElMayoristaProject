@@ -1,8 +1,6 @@
 package com.elmayorista.payment;
 
-import com.elmayorista.dto.CreatePaymentRequest;
-import com.elmayorista.dto.Mapper;
-import com.elmayorista.dto.PaymentDTO;
+import com.elmayorista.config.Mapper;
 import com.elmayorista.notification.NotificationService;
 import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleRepository;
@@ -84,6 +82,9 @@ public class PaymentService {
             // Clear pending sale notifications since sale is now under review
             notificationService.clearNotificationsForSale(sale.getId());
 
+            // Notify admins that this sale is ready for review
+            notificationService.notifyAdminsSaleUnderReview(sale);
+
         } else {
             sale.setPaymentStatus(PaymentStatus.PARTIALLY_PAID);
         }
@@ -120,14 +121,6 @@ public class PaymentService {
             throw new IllegalStateException(
                     "No puedes eliminar comprobantes de una venta que ya fue revisada o aprobada. Estado actual: "
                             + sale.getStatus());
-        }
-
-        // Eliminar el archivo del comprobante si existe
-        // TODO: Implementar fileStorageService.deleteFile() cuando esté disponible
-        if (payment.getReceiptUrl() != null && !payment.getReceiptUrl().isEmpty()) {
-            // fileStorageService.deleteFile(payment.getReceiptUrl());
-            System.out.println(
-                    "Archivo de comprobante no eliminado (método no implementado): " + payment.getReceiptUrl());
         }
 
         // Eliminar el pago

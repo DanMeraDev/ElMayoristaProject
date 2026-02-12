@@ -94,6 +94,17 @@ public class Sale {
     private BigDecimal commissionPercentage = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "sale_type", nullable = false)
+    @Builder.Default
+    private SaleType saleType = SaleType.STANDARD;
+
+    @Column(name = "tv_serial_number")
+    private String tvSerialNumber;
+
+    @Column(name = "tv_model")
+    private String tvModel;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @NotNull(message = "El estado de la venta es obligatorio")
     @Builder.Default

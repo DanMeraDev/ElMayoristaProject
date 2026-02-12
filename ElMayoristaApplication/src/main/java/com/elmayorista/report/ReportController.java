@@ -1,8 +1,7 @@
 package com.elmayorista.report;
 
-import com.elmayorista.dto.CycleDTO;
-import com.elmayorista.dto.Mapper;
-import com.elmayorista.dto.SaleDTO;
+import com.elmayorista.config.Mapper;
+import com.elmayorista.sale.SaleDTO;
 import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleService;
 import com.elmayorista.service.FileStorageService;
@@ -18,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Controller for report-related operations.
@@ -39,7 +39,7 @@ public class ReportController {
      * Upload and process a sales report PDF.
      */
     @PostMapping("/upload-report")
-    public ResponseEntity<SaleDTO> processReport(@RequestParam("file") MultipartFile file,
+    public ResponseEntity<?> processReport(@RequestParam("file") MultipartFile file,
             Authentication authentication) {
         try {
             // 1. Get authenticated user
@@ -62,6 +62,11 @@ public class ReportController {
             SaleDTO response = mapper.toSaleDTO(createdSale);
 
             return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Duplicate or invalid sale: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", e.getMessage())
+            );
         } catch (Exception e) {
             log.error("Error processing report PDF", e);
             return ResponseEntity.internalServerError().build();
@@ -114,20 +119,20 @@ public class ReportController {
     }
 
     /**
-     * Close the current cycle and download the Excel report.
+     * Close the current cycle and download the ZIP report (Ventas + Fiados + Televisores).
      */
     @PostMapping("/close-cycle")
     public ResponseEntity<byte[]> closeCycle() {
         try {
             byte[] report = cycleService.closeCycle();
 
-            String filename = "Cierre_Ciclo_" + java.time.LocalDate.now() + ".xlsx";
+            String filename = "Cierre_Ciclo_" + java.time.LocalDate.now() + ".zip";
 
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=" + filename)
                     .contentType(org.springframework.http.MediaType
-                            .parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                            .parseMediaType("application/zip"))
                     .body(report);
 
         } catch (IllegalStateException e) {

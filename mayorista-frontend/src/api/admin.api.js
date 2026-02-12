@@ -80,6 +80,12 @@ export const getCurrentCycleStats = () => axios.get('/reports/current-cycle');
 // Get a specific cycle by ID
 export const getCycleById = (cycleId) => axios.get(`/reports/cycles/${cycleId}`);
 
+// ========== Manual Notifications ==========
+
+// Send manual notification to seller about a sale
+export const notifySeller = (saleId, channel) =>
+  axios.post(`/admin/sales/${saleId}/notify`, { channel });
+
 // ========== Fiados Management (Admin) ==========
 
 // Get all fiados from all sellers

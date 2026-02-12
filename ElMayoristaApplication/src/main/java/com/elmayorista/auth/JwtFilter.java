@@ -4,6 +4,7 @@ import com.elmayorista.user.UserService;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -45,18 +46,23 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         }
 
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
+        // Extraer JWT de la cookie
+        String jwt = null;
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("jwt".equals(cookie.getName())) {
+                    jwt = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
         final String userEmail;
 
-        // Verificar si hay un header de autorización con formato Bearer
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (jwt == null || jwt.isEmpty()) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        // Extraer el token (eliminando "Bearer ")
-        jwt = authHeader.substring(7);
 
         try {
             // Extraer el email del token
@@ -78,11 +84,6 @@ public class JwtFilter extends OncePerRequestFilter {
                         return;
                     }
 
-                    // Log de depuración
-                    System.out.println("Token válido para usuario: " + userEmail);
-                    System.out.println("Autoridades del usuario: " + userDetails.getAuthorities());
-
-                    // Crear token de autenticación
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,
                             null,

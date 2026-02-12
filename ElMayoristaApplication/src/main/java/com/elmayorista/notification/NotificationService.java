@@ -1,6 +1,5 @@
 package com.elmayorista.notification;
 
-import com.elmayorista.dto.NotificationDTO;
 import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleRepository;
 import com.elmayorista.sale.SaleStatus;
@@ -63,15 +62,78 @@ public class NotificationService {
     }
 
     @Transactional
+    public void sendManualNotification(Long saleId, String channel) {
+        Sale sale = saleRepository.findById(saleId)
+                .orElseThrow(() -> new RuntimeException("Venta no encontrada"));
+
+        User seller = sale.getSeller();
+        String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
+        String customerName = sale.getCustomerName() != null ? sale.getCustomerName() : "Sin nombre";
+        long daysPending = java.time.temporal.ChronoUnit.DAYS.between(sale.getOrderDate(), LocalDateTime.now());
+
+        boolean sendEmail = "EMAIL".equals(channel) || "BOTH".equals(channel);
+        boolean sendPlatform = "PLATFORM".equals(channel) || "BOTH".equals(channel);
+
+        if (sendPlatform) {
+            Notification notification = Notification.builder()
+                    .user(seller)
+                    .type(NotificationType.SALE_PENDING_REMINDER)
+                    .title("Recordatorio de pago")
+                    .message("Venta " + orderNum + " - " + customerName + " (enviado por admin)")
+                    .referenceId(sale.getId())
+                    .referenceDate(sale.getOrderDate())
+                    .read(false)
+                    .build();
+            notificationRepository.save(notification);
+        }
+
+        if (sendEmail) {
+            emailService.sendPendingSaleReminderToSeller(
+                    seller.getEmail(),
+                    seller.getFullName(),
+                    orderNum,
+                    customerName,
+                    sale.getTotal().toPlainString(),
+                    daysPending);
+        }
+
+        log.info("Manual notification sent for sale {} via {} to seller {}",
+                saleId, channel, seller.getEmail());
+    }
+
+    @Transactional
     public void clearNotificationsForSale(Long saleId) {
         List<Notification> notifications = notificationRepository
                 .findByReferenceIdAndTypeIn(saleId, List.of(
                         NotificationType.SALE_PENDING_REMINDER,
-                        NotificationType.SALE_PENDING_ADMIN_ALERT));
+                        NotificationType.SALE_PENDING_ADMIN_ALERT,
+                        NotificationType.SALE_UNDER_REVIEW));
         if (!notifications.isEmpty()) {
             notificationRepository.deleteAll(notifications);
             log.info("Cleared {} notifications for sale {}", notifications.size(), saleId);
         }
+    }
+
+    @Transactional
+    public void notifyAdminsSaleUnderReview(Sale sale) {
+        List<User> admins = userRepository.findByRole(Role.ADMIN);
+        String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
+        String sellerName = sale.getSeller().getFullName();
+
+        for (User admin : admins) {
+            Notification notification = Notification.builder()
+                    .user(admin)
+                    .type(NotificationType.SALE_UNDER_REVIEW)
+                    .title("Venta pendiente de revision")
+                    .message("La venta " + orderNum + " de " + sellerName + " esta lista para revision. Total: $" + sale.getTotal().toPlainString())
+                    .referenceId(sale.getId())
+                    .referenceDate(sale.getOrderDate())
+                    .read(false)
+                    .build();
+            notificationRepository.save(notification);
+        }
+
+        log.info("Notified {} admins about sale {} under review", admins.size(), sale.getId());
     }
 
     @Transactional
@@ -208,16 +270,32 @@ public class NotificationService {
     private void cleanOrphanedNotifications() {
         List<Notification> allReminders = notificationRepository.findAll().stream()
                 .filter(n -> n.getType() == NotificationType.SALE_PENDING_REMINDER
-                        || n.getType() == NotificationType.SALE_PENDING_ADMIN_ALERT)
+                        || n.getType() == NotificationType.SALE_PENDING_ADMIN_ALERT
+                        || n.getType() == NotificationType.SALE_UNDER_REVIEW)
                 .collect(Collectors.toList());
 
         int cleaned = 0;
         for (Notification notification : allReminders) {
             if (notification.getReferenceId() != null) {
                 Optional<Sale> sale = saleRepository.findById(notification.getReferenceId());
-                if (sale.isEmpty() || sale.get().getStatus() != SaleStatus.PENDING) {
+                if (sale.isEmpty()) {
                     notificationRepository.delete(notification);
                     cleaned++;
+                } else {
+                    SaleStatus status = sale.get().getStatus();
+                    // Limpiar notificaciones PENDING si la venta ya no está PENDING
+                    if ((notification.getType() == NotificationType.SALE_PENDING_REMINDER
+                            || notification.getType() == NotificationType.SALE_PENDING_ADMIN_ALERT)
+                            && status != SaleStatus.PENDING) {
+                        notificationRepository.delete(notification);
+                        cleaned++;
+                    }
+                    // Limpiar notificaciones UNDER_REVIEW si la venta ya no está en revisión
+                    if (notification.getType() == NotificationType.SALE_UNDER_REVIEW
+                            && status != SaleStatus.UNDER_REVIEW) {
+                        notificationRepository.delete(notification);
+                        cleaned++;
+                    }
                 }
             }
         }

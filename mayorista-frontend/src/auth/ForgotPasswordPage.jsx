@@ -37,7 +37,7 @@ function ForgotPasswordPage() {
                     {/* Logo */}
                     <div className="flex justify-center mb-8">
                         <img
-                            src="https://megamayorista.net/wp-content/uploads/2025/09/cropped-cropped-LOGO-LARGO.webp"
+                            src="/logo.png"
                             alt="El Mayorista Logo"
                             className="h-14 object-contain"
                         />

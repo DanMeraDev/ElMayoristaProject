@@ -1,6 +1,7 @@
 package com.elmayorista.report;
 
-import com.elmayorista.dto.CycleDTO;
+import com.elmayorista.customer.CustomerFiado;
+import com.elmayorista.customer.CustomerFiadoRepository;
 import com.elmayorista.fiado.Fiado;
 import com.elmayorista.fiado.FiadoRepository;
 import com.elmayorista.fiado.FiadoStatus;
@@ -8,6 +9,7 @@ import com.elmayorista.payment.Payment;
 import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleRepository;
 import com.elmayorista.sale.SaleStatus;
+import com.elmayorista.sale.SaleType;
 import com.elmayorista.service.FileStorageService;
 import com.elmayorista.user.User;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Service for managing billing cycles.
@@ -41,6 +45,7 @@ public class CycleService {
     private final CycleRepository cycleRepository;
     private final FileStorageService fileStorageService;
     private final FiadoRepository fiadoRepository;
+    private final CustomerFiadoRepository customerFiadoRepository;
 
     /**
      * Get current cycle statistics (pending to close).
@@ -128,16 +133,31 @@ public class CycleService {
                 .map(sale -> sale.getCommissionAmount() != null ? sale.getCommissionAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Generate Excel Report
-        byte[] excelReport = generateExcelReport(sales);
+        // Fetch fiados data before generating reports
+        List<Fiado> unsettledEmployeeFiados = fiadoRepository.findBySettledInCycleFalse();
+        List<CustomerFiado> unsettledCustomerFiados = customerFiadoRepository.findBySettledInCycleFalse();
 
-        // Upload Excel to cloud storage
-        String filename = "Cierre_Ciclo_" + LocalDate.now() + ".xlsx";
-        String excelUrl = fileStorageService.uploadBytes(
-                excelReport,
+        // Filter TV sales from this cycle
+        List<Sale> tvSales = sales.stream()
+                .filter(s -> s.getSaleType() == SaleType.TV)
+                .toList();
+
+        // Generate 3 Excel Reports
+        String dateStr = LocalDate.now().toString();
+        byte[] ventasExcel = generateExcelReport(sales);
+        byte[] fiadosExcel = generateFiadosExcel(unsettledEmployeeFiados, unsettledCustomerFiados);
+        byte[] tvExcel = generateTvSalesExcel(tvSales);
+
+        // Package into ZIP
+        byte[] zipReport = packageAsZip(ventasExcel, fiadosExcel, tvExcel, dateStr);
+
+        // Upload ZIP to cloud storage
+        String filename = "Cierre_Ciclo_" + dateStr + ".zip";
+        String zipUrl = fileStorageService.uploadBytes(
+                zipReport,
                 filename,
                 "reports",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                "application/zip");
 
         // Create Cycle record
         Cycle cycle = Cycle.builder()
@@ -146,7 +166,7 @@ public class CycleService {
                 .totalSales(totalSalesAmount)
                 .totalCommissions(totalCommissions)
                 .salesCount(sales.size())
-                .excelReportUrl(excelUrl)
+                .excelReportUrl(zipUrl)
                 .status(CycleStatus.CLOSED)
                 .build();
 
@@ -160,22 +180,35 @@ public class CycleService {
         }
         saleRepository.saveAll(sales);
 
-        // Settle pending fiados for all sellers in this cycle
+        // Settle pending employee fiados for all sellers in this cycle
         Map<User, List<Sale>> salesBySellerForFiados = sales.stream()
                 .collect(Collectors.groupingBy(Sale::getSeller));
         for (User seller : salesBySellerForFiados.keySet()) {
-            List<Fiado> unsettledFiados = fiadoRepository.findBySellerAndSettledInCycleFalse(seller);
-            for (Fiado fiado : unsettledFiados) {
+            List<Fiado> sellerFiados = fiadoRepository.findBySellerAndSettledInCycleFalse(seller);
+            for (Fiado fiado : sellerFiados) {
                 fiado.setStatus(FiadoStatus.SETTLED);
                 fiado.setSettledInCycle(true);
             }
-            if (!unsettledFiados.isEmpty()) {
-                fiadoRepository.saveAll(unsettledFiados);
-                log.info("Settled {} fiados for seller: {}", unsettledFiados.size(), seller.getFullName());
+            if (!sellerFiados.isEmpty()) {
+                fiadoRepository.saveAll(sellerFiados);
+                log.info("Settled {} employee fiados for seller: {}", sellerFiados.size(), seller.getFullName());
+            }
+
+            // Settle pending customer fiados for this seller
+            List<CustomerFiado> sellerCustomerFiados = customerFiadoRepository
+                    .findBySellerAndSettledInCycleFalse(seller);
+            for (CustomerFiado cf : sellerCustomerFiados) {
+                cf.setStatus(FiadoStatus.SETTLED);
+                cf.setSettledInCycle(true);
+            }
+            if (!sellerCustomerFiados.isEmpty()) {
+                customerFiadoRepository.saveAll(sellerCustomerFiados);
+                log.info("Settled {} customer fiados for seller: {}", sellerCustomerFiados.size(),
+                        seller.getFullName());
             }
         }
 
-        return excelReport;
+        return zipReport;
     }
 
     /**
@@ -574,5 +607,268 @@ public class CycleService {
         highlightStyle.setFillForegroundColor(color.getIndex());
         highlightStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         return highlightStyle;
+    }
+
+    /**
+     * Generate Fiados Excel with 2 sheets: CLIENTES and EMPLEADOS.
+     */
+    private byte[] generateFiadosExcel(List<Fiado> employeeFiados, List<CustomerFiado> customerFiados)
+            throws IOException {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle currencyStyle = createCurrencyStyle(workbook);
+
+            Locale spanishLocale = Locale.forLanguageTag("es-ES");
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd-MMM", spanishLocale);
+
+            // ========== CLIENTES SHEET ==========
+            Sheet clientesSheet = workbook.createSheet("CLIENTES");
+            String[] clienteHeaders = {
+                    "FECHA DE VENTA", "CLIENTE", "CÉDULA CLIENTE", "TELÉFONO", "N° DE FACTURA",
+                    "MONTO TOTAL", "ABONOS PARCIALES", "SALDO TOTAL", "FECHA DE ABONOS",
+                    "FORMA DE PAGO", "ESTADO", "PLAZO APROBADO", "ORIGEN / VENDEDOR", "OBSERVACIONES"
+            };
+
+            Row clienteHeaderRow = clientesSheet.createRow(0);
+            for (int i = 0; i < clienteHeaders.length; i++) {
+                Cell cell = clienteHeaderRow.createCell(i);
+                cell.setCellValue(clienteHeaders[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            for (CustomerFiado cf : customerFiados) {
+                Row row = clientesSheet.createRow(rowNum++);
+
+                // Fecha de venta
+                String dateStr = cf.getCreatedAt() != null ? cf.getCreatedAt().format(dateFormatter) : "-";
+                row.createCell(0).setCellValue(dateStr);
+
+                // Cliente
+                row.createCell(1).setCellValue(
+                        cf.getCustomer() != null ? cf.getCustomer().getFullName() : "-");
+
+                // Cédula cliente
+                row.createCell(2).setCellValue(
+                        cf.getCustomer() != null && cf.getCustomer().getIdNumber() != null
+                                ? cf.getCustomer().getIdNumber()
+                                : "");
+
+                // Teléfono
+                row.createCell(3).setCellValue(
+                        cf.getCustomer() != null && cf.getCustomer().getPhoneNumber() != null
+                                ? cf.getCustomer().getPhoneNumber()
+                                : "");
+
+                // N° de factura
+                row.createCell(4).setCellValue(cf.getItemName() != null ? cf.getItemName() : "");
+
+                // Monto total
+                Cell montoCell = row.createCell(5);
+                montoCell.setCellValue(cf.getPrice() != null ? cf.getPrice().doubleValue() : 0);
+                montoCell.setCellStyle(currencyStyle);
+
+                // Abonos parciales (vacío)
+                row.createCell(6).setCellValue("");
+
+                // Saldo total (= monto total sin abonos)
+                Cell saldoCell = row.createCell(7);
+                saldoCell.setCellValue(cf.getPrice() != null ? cf.getPrice().doubleValue() : 0);
+                saldoCell.setCellStyle(currencyStyle);
+
+                // Fecha de abonos (vacío)
+                row.createCell(8).setCellValue("");
+
+                // Forma de pago (vacío)
+                row.createCell(9).setCellValue("");
+
+                // Estado
+                row.createCell(10).setCellValue(
+                        cf.getStatus() != null ? cf.getStatus().name() : "PENDIENTE");
+
+                // Plazo aprobado (vacío)
+                row.createCell(11).setCellValue("");
+
+                // Origen / Vendedor
+                row.createCell(12).setCellValue(
+                        cf.getSeller() != null ? cf.getSeller().getFullName() : "-");
+
+                // Observaciones (vacío)
+                row.createCell(13).setCellValue("");
+            }
+
+            for (int i = 0; i < clienteHeaders.length; i++) {
+                clientesSheet.autoSizeColumn(i);
+            }
+
+            // ========== EMPLEADOS SHEET ==========
+            Sheet empleadosSheet = workbook.createSheet("EMPLEADOS");
+            String[] empleadoHeaders = {
+                    "FECHA DE VENTA", "NOMBRE", "CÉDULA", "TELÉFONO", "N° DE FACTURA",
+                    "MONTO TOTAL", "ABONOS PARCIALES", "SALDO TOTAL", "FECHA DE ABONOS",
+                    "FORMA DE PAGO", "ESTADO", "PLAZO APROBADO", "ORIGEN / VENDEDOR", "OBSERVACIONES"
+            };
+
+            Row empleadoHeaderRow = empleadosSheet.createRow(0);
+            for (int i = 0; i < empleadoHeaders.length; i++) {
+                Cell cell = empleadoHeaderRow.createCell(i);
+                cell.setCellValue(empleadoHeaders[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            rowNum = 1;
+            for (Fiado fiado : employeeFiados) {
+                Row row = empleadosSheet.createRow(rowNum++);
+
+                // Fecha de venta
+                String dateStr = fiado.getCreatedAt() != null ? fiado.getCreatedAt().format(dateFormatter) : "-";
+                row.createCell(0).setCellValue(dateStr);
+
+                // Nombre (seller)
+                row.createCell(1).setCellValue(
+                        fiado.getSeller() != null ? fiado.getSeller().getFullName() : "-");
+
+                // Cédula (vacío - User no tiene cédula)
+                row.createCell(2).setCellValue("");
+
+                // Teléfono
+                row.createCell(3).setCellValue(
+                        fiado.getSeller() != null && fiado.getSeller().getPhoneNumber() != null
+                                ? fiado.getSeller().getPhoneNumber()
+                                : "");
+
+                // N° de factura
+                row.createCell(4).setCellValue(fiado.getItemName() != null ? fiado.getItemName() : "");
+
+                // Monto total
+                Cell montoCell = row.createCell(5);
+                montoCell.setCellValue(fiado.getPrice() != null ? fiado.getPrice().doubleValue() : 0);
+                montoCell.setCellStyle(currencyStyle);
+
+                // Abonos parciales (vacío)
+                row.createCell(6).setCellValue("");
+
+                // Saldo total
+                Cell saldoCell = row.createCell(7);
+                saldoCell.setCellValue(fiado.getPrice() != null ? fiado.getPrice().doubleValue() : 0);
+                saldoCell.setCellStyle(currencyStyle);
+
+                // Fecha de abonos (vacío)
+                row.createCell(8).setCellValue("");
+
+                // Forma de pago (vacío)
+                row.createCell(9).setCellValue("");
+
+                // Estado
+                row.createCell(10).setCellValue(
+                        fiado.getStatus() != null ? fiado.getStatus().name() : "PENDIENTE");
+
+                // Plazo aprobado (vacío)
+                row.createCell(11).setCellValue("");
+
+                // Origen / Vendedor
+                row.createCell(12).setCellValue(
+                        fiado.getSeller() != null ? fiado.getSeller().getFullName() : "-");
+
+                // Observaciones (vacío)
+                row.createCell(13).setCellValue("");
+            }
+
+            for (int i = 0; i < empleadoHeaders.length; i++) {
+                empleadosSheet.autoSizeColumn(i);
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Generate TV Sales Excel report.
+     */
+    private byte[] generateTvSalesExcel(List<Sale> tvSales) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            CellStyle headerStyle = createHeaderStyle(workbook);
+
+            Locale spanishLocale = Locale.forLanguageTag("es-ES");
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd-MMM", spanishLocale);
+
+            Sheet sheet = workbook.createSheet("TELEVISORES");
+            String[] headers = {
+                    "VENDEDOR / ORIGEN", "FECHA DE COMPRA", "CLIENTE", "CEDULA CLIENTE",
+                    "TELEFONO", "MARCA", "SERIE", "OBSERVACIONES"
+            };
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
+            for (Sale sale : tvSales) {
+                Row row = sheet.createRow(rowNum++);
+
+                // Vendedor / Origen
+                row.createCell(0).setCellValue(
+                        sale.getSeller() != null ? sale.getSeller().getFullName() : "-");
+
+                // Fecha de compra
+                String dateStr = sale.getOrderDate() != null ? sale.getOrderDate().format(dateFormatter) : "-";
+                row.createCell(1).setCellValue(dateStr);
+
+                // Cliente
+                row.createCell(2).setCellValue(sale.getCustomerName() != null ? sale.getCustomerName() : "-");
+
+                // Cédula cliente
+                row.createCell(3).setCellValue(
+                        sale.getCustomerIdNumber() != null ? sale.getCustomerIdNumber() : "");
+
+                // Teléfono
+                row.createCell(4).setCellValue(
+                        sale.getCustomerPhone() != null ? sale.getCustomerPhone() : "");
+
+                // Marca (tvModel)
+                row.createCell(5).setCellValue(sale.getTvModel() != null ? sale.getTvModel() : "");
+
+                // Serie (tvSerialNumber)
+                row.createCell(6).setCellValue(
+                        sale.getTvSerialNumber() != null ? sale.getTvSerialNumber() : "");
+
+                // Observaciones (vacío)
+                row.createCell(7).setCellValue("");
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Package multiple Excel files into a ZIP archive.
+     */
+    private byte[] packageAsZip(byte[] ventasExcel, byte[] fiadosExcel, byte[] tvExcel, String dateStr)
+            throws IOException {
+        ByteArrayOutputStream zipOut = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(zipOut)) {
+            addZipEntry(zos, "Ventas_Ciclo_" + dateStr + ".xlsx", ventasExcel);
+            addZipEntry(zos, "Fiados_Ciclo_" + dateStr + ".xlsx", fiadosExcel);
+            addZipEntry(zos, "Televisores_Ciclo_" + dateStr + ".xlsx", tvExcel);
+        }
+        return zipOut.toByteArray();
+    }
+
+    private void addZipEntry(ZipOutputStream zos, String name, byte[] data) throws IOException {
+        ZipEntry entry = new ZipEntry(name);
+        zos.putNextEntry(entry);
+        zos.write(data);
+        zos.closeEntry();
     }
 }

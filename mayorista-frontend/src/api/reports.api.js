@@ -51,6 +51,10 @@ export const registerPaymentWithReceipt = (saleId, amount, paymentMethod, notes,
     });
 };
 
+// Create a TV sale (manual form)
+export const createTvSale = (data) =>
+    axios.post('/sales/tv', data);
+
 // Delete a sale (only if seller owns it and status allows)
 export const deleteSale = (saleId) =>
     axios.delete(`/sales/${saleId}`);

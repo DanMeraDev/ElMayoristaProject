@@ -4,6 +4,8 @@ export const registerSeller = (user) => axios.post('/auth/register', user);
 
 export const login = (user) => axios.post('/auth/login', user);
 
+export const logout = () => axios.post('/auth/logout');
+
 // Get current user profile (requires authentication)
 export const getCurrentUser = () => axios.get('/users/me');
 

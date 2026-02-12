@@ -1,7 +1,7 @@
 package com.elmayorista.service;
 
-import com.elmayorista.dto.ProductDTO;
-import com.elmayorista.dto.SaleReportDTO;
+import com.elmayorista.sale.ProductDTO;
+import com.elmayorista.sale.SaleReportDTO;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -83,8 +83,7 @@ public class PdfParsingService {
                         }
                     }
                 } catch (Exception e) {
-                    // Both formats failed for this SKU line. Log or ignore.
-                    // System.err.println("Could not parse product with SKU: " + sku);
+                    // Both formats failed for this SKU line
                 }
             }
         }

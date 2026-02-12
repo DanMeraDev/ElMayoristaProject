@@ -53,7 +53,7 @@ function AdminSidebar({ isOpen, onClose, pendingRequestsCount = 0 }) {
             >
                 <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border dark:border-slate-700">
                     <img
-                        src="https://megamayorista.net/wp-content/uploads/2025/09/cropped-cropped-LOGO-LARGO.webp"
+                        src="/logo.png"
                         alt="El Mayorista"
                         className="h-8 object-contain"
                     />

@@ -1,6 +1,5 @@
 package com.elmayorista.customer;
 
-import com.elmayorista.dto.CustomerDTO;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
 import lombok.RequiredArgsConstructor;

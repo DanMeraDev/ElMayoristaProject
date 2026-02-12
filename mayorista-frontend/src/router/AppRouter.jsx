@@ -3,21 +3,20 @@ import { useAuth } from '../context/AuthContext';
 import AuthPage from '../auth/AuthPage';
 import ForgotPasswordPage from '../auth/ForgotPasswordPage';
 import ResetPasswordPage from '../auth/ResetPasswordPage';
-import Dashboard from '../admin/Dashboard';
-import SellersList from '../admin/SellersList';
-import SellerDetails from '../admin/SellerDetails';
-import SalesReview from '../admin/SalesReview';
-import AdminSalesHistory from '../admin/AdminSalesHistory';
-import AdminReports from '../admin/AdminReports';
-import AdminSettings from '../admin/AdminSettings';
-import SellerHome from '../seller/SellerHome';
-import SellerSales from '../seller/SellerSales';
+import Dashboard from '../admin/pages/Dashboard';
+import SellersList from '../admin/pages/SellersList';
+import SellerDetails from '../admin/pages/SellerDetails';
+import SalesReview from '../admin/pages/SalesReview';
+import AdminSalesHistory from '../admin/pages/AdminSalesHistory';
+import AdminReports from '../admin/pages/AdminReports';
+import AdminSettings from '../admin/pages/AdminSettings';
+import SellerHome from '../seller/pages/SellerHome';
+import SellerSales from '../seller/pages/SellerSales';
 import SellerSupport from '../seller/pages/SellerSupport';
-import SellerMisFiados from '../seller/SellerMisFiados';
-import SellerFiarUsuarios from '../seller/SellerFiarUsuarios';
-import PendingApproval from '../seller/PendingApproval';
+import SellerMisFiados from '../seller/pages/SellerMisFiados';
+import SellerFiarUsuarios from '../seller/pages/SellerFiarUsuarios';
+import PendingApproval from '../seller/pages/PendingApproval';
 
-// Componente para proteger rutas
 const ProtectedRoute = ({ children, allowedRoles }) => {
     const { user, isAuthenticated, isLoading } = useAuth();
     const location = useLocation();
@@ -30,16 +29,11 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     // Get role from roles array (backend returns roles as array)
     const userRole = user?.roles?.[0] || user?.role;
 
-    // Debug: log what we have
-    console.log('ProtectedRoute check:', { isAuthenticated, user, userRole, allowedRoles, path: location.pathname });
-
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
     }
 
-    // Safety check: if user exists but role is undefined
     if (!user || !userRole) {
-        console.error('User authenticated but no role found:', user);
         return <Navigate to="/login" replace />;
     }
 
@@ -48,16 +42,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
         return <Navigate to="/pending-approval" replace />;
     }
 
-    // Check role - if doesn't match, go to appropriate default instead of /login to avoid loop
     if (allowedRoles && !allowedRoles.includes(userRole)) {
-        console.warn('Role mismatch:', { userRole, allowedRoles });
-        // Redirect to appropriate page based on role instead of /login
         if (userRole === 'ADMIN') {
             return <Navigate to="/admin/dashboard" replace />;
         } else if (userRole === 'SELLER') {
             return <Navigate to="/seller/home" replace />;
         }
-        // Last resort: show unauthorized
         return <div>No tienes permiso para acceder a esta página</div>;
     }
 

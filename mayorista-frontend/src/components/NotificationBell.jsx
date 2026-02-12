@@ -192,14 +192,18 @@ function NotificationBell() {
                                             !notification.read
                                                 ? notification.type === 'SALE_PENDING_ADMIN_ALERT'
                                                     ? 'bg-red-100 dark:bg-red-900/30'
-                                                    : 'bg-orange-100 dark:bg-orange-900/30'
+                                                    : notification.type === 'SALE_UNDER_REVIEW'
+                                                        ? 'bg-purple-100 dark:bg-purple-900/30'
+                                                        : 'bg-orange-100 dark:bg-orange-900/30'
                                                 : 'bg-gray-100 dark:bg-slate-700'
                                         }`}>
                                             <AlertCircle className={`w-4 h-4 ${
                                                 !notification.read
                                                     ? notification.type === 'SALE_PENDING_ADMIN_ALERT'
                                                         ? 'text-red-600 dark:text-red-400'
-                                                        : 'text-orange-600 dark:text-orange-400'
+                                                        : notification.type === 'SALE_UNDER_REVIEW'
+                                                            ? 'text-purple-600 dark:text-purple-400'
+                                                            : 'text-orange-600 dark:text-orange-400'
                                                     : 'text-gray-400 dark:text-slate-500'
                                             }`} />
                                         </div>

@@ -1,6 +1,5 @@
 package com.elmayorista.customer;
 
-import com.elmayorista.dto.CustomerDTO;
 import com.elmayorista.user.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

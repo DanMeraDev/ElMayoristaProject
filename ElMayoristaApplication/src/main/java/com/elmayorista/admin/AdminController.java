@@ -1,7 +1,7 @@
 package com.elmayorista.admin;
 
-import com.elmayorista.dto.Mapper;
-import com.elmayorista.dto.SaleDTO;
+import com.elmayorista.config.Mapper;
+import com.elmayorista.sale.SaleDTO;
 import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleService;
 import com.elmayorista.user.AdminDashboardStats;
@@ -30,6 +30,8 @@ import java.io.IOException;
 
 import java.util.Map;
 
+import com.elmayorista.notification.NotificationService;
+
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
@@ -38,6 +40,7 @@ public class AdminController {
     private final UserService userService;
     private final ExcelReportService excelReportService;
     private final SaleService saleService;
+    private final NotificationService notificationService;
     private final Mapper mapper;
 
     // DTO anidado para la solicitud de revisión
@@ -180,5 +183,20 @@ public class AdminController {
             @RequestParam boolean enabled) {
         User updatedUser = userService.toggleSellerEnabled(userId, enabled);
         return ResponseEntity.ok(updatedUser);
+    }
+
+    /**
+     * Envía una notificación manual al vendedor sobre una venta.
+     *
+     * @param saleId  ID de la venta
+     * @param body    channel: "EMAIL", "PLATFORM" o "BOTH"
+     */
+    @PostMapping("/sales/{saleId}/notify")
+    public ResponseEntity<Map<String, String>> notifySeller(
+            @PathVariable Long saleId,
+            @RequestBody Map<String, String> body) {
+        String channel = body.getOrDefault("channel", "BOTH");
+        notificationService.sendManualNotification(saleId, channel);
+        return ResponseEntity.ok(Map.of("message", "Notificacion enviada exitosamente"));
     }
 }

@@ -1,4 +1,4 @@
-import { X, DollarSign, FileText, CheckCircle, Upload, Image as ImageIcon } from 'lucide-react';
+import { X, DollarSign, FileText, CheckCircle, Upload, Image as ImageIcon, Tv } from 'lucide-react';
 
 function SaleDetailModal({ sale, onClose, children, userCommission }) {
     if (!sale) return null;
@@ -53,7 +53,12 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
             <div className="bg-white dark:bg-surface-dark rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
                 <div className="sticky top-0 bg-white dark:bg-surface-dark px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between z-10">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        {sale.saleType === 'TV' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-md">
+                                <Tv className="w-3.5 h-3.5" /> TV
+                            </span>
+                        )}
                         Detalle Venta #{sale.orderNumber || sale.id}
                     </h3>
                     <button
@@ -92,6 +97,26 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                             <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-1">Motivo del Rechazo:</p>
                             <p className="text-sm text-red-600 dark:text-red-300">{sale.rejectionReason}</p>
+                        </div>
+                    )}
+
+                    {/* TV Data */}
+                    {sale.saleType === 'TV' && (
+                        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Tv className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                <p className="text-sm font-semibold text-purple-700 dark:text-purple-300">Datos del Televisor</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <p className="text-xs text-purple-600 dark:text-purple-400">Numero de Serie</p>
+                                    <p className="text-sm font-medium text-gray-800 dark:text-white">{sale.tvSerialNumber || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-purple-600 dark:text-purple-400">Modelo</p>
+                                    <p className="text-sm font-medium text-gray-800 dark:text-white">{sale.tvModel || '-'}</p>
+                                </div>
+                            </div>
                         </div>
                     )}
 

@@ -1,6 +1,5 @@
 package com.elmayorista.config;
 
-import com.elmayorista.dto.ErrorResponse;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;

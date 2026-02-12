@@ -8,8 +8,6 @@ function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Determine initial state based on URL, but allow toggling
-  // If URL is /register, start with isLogin = false
   const [isLogin, setIsLogin] = useState(location.pathname === '/login' || location.pathname === '/');
 
   const [showPassword, setShowPassword] = useState(false);
@@ -22,7 +20,6 @@ function AuthPage() {
     password: ''
   });
 
-  // Check for session expired message
   useEffect(() => {
     const expired = sessionStorage.getItem('sessionExpired');
     const loginError = sessionStorage.getItem('loginError');
@@ -30,18 +27,14 @@ function AuthPage() {
     if (loginError) {
       setLoginErrorMsg(loginError);
       sessionStorage.removeItem('loginError');
-      // Auto-hide after 10 seconds or keep until manual dismiss
     } else if (expired === 'true') {
       setSessionExpiredMsg(true);
       sessionStorage.removeItem('sessionExpired');
-      // Auto-hide after 5 seconds
       setTimeout(() => setSessionExpiredMsg(false), 5000);
     }
   }, []);
 
-  // Sync state if URL changes (optional, but good for back button)
   useEffect(() => {
-    // Sólo actualizar cuando el pathname y el estado difieran
     if (location.pathname === '/register' && isLogin) {
       setIsLogin(false);
     } else if (location.pathname === '/login' && !isLogin) {
@@ -50,21 +43,14 @@ function AuthPage() {
   }, [location.pathname, isLogin]);
 
 
-  // Redirection if authenticated - only from login/register pages
   useEffect(() => {
-    // Don't redirect while loading
     if (isLoading) return;
 
-    // Only redirect if we're on the auth pages
     const isOnAuthPage = location.pathname === '/login' || location.pathname === '/register' || location.pathname === '/';
 
     if (isAuthenticated && user && isOnAuthPage) {
-      console.log('AuthPage redirecting user:', user);
-
-      // Get role from roles array (backend returns roles as array)
       const userRole = user.roles?.[0] || user.role;
 
-      // Handle navigation based on role and approval status
       if (userRole === 'ADMIN') {
         navigate('/admin/dashboard', { replace: true });
       } else if (userRole === 'SELLER' && user.pendingApproval) {
@@ -119,7 +105,7 @@ function AuthPage() {
           {/* Logo */}
           <div className="flex justify-center mb-8">
             <img
-              src="https://megamayorista.net/wp-content/uploads/2025/09/cropped-cropped-LOGO-LARGO.webp"
+              src="/logo.png"
               alt="El Mayorista Logo"
               className="h-14 object-contain"
             />

@@ -9,7 +9,7 @@ function SellerSidebar({ isOpen, setIsOpen, user, onLogout }) {
         <aside className={`flex flex-col bg-sidebar-dark text-slate-300 border-r border-slate-600 h-full fixed left-0 top-0 z-50 transition-all duration-300 ease-in-out ${isOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
             <div className="h-16 flex items-center justify-between px-6 border-b border-slate-600">
                 <img
-                    src="https://megamayorista.net/wp-content/uploads/2025/09/cropped-cropped-LOGO-LARGO.webp"
+                    src="/logo.png"
                     alt="El Mayorista"
                     className="h-8 object-contain"
                 />

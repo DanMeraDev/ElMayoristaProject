@@ -1,6 +1,5 @@
 package com.elmayorista.customer;
 
-import com.elmayorista.dto.CustomerFiadoDTO;
 import com.elmayorista.fiado.FiadoStatus;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;

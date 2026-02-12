@@ -1,6 +1,5 @@
 package com.elmayorista.support;
 
-import com.elmayorista.dto.TicketDTO;
 import com.elmayorista.service.EmailService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;

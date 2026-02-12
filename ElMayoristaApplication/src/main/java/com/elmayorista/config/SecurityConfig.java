@@ -51,7 +51,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Definir las reglas de autorización para cada ruta.
                 .authorizeHttpRequests(authorize -> authorize
-                        // Permitir acceso público a todos los endpoints de autenticación
+                        // Permitir acceso público a todos los endpoints de autenticación (login, register, logout, etc.)
                         .requestMatchers("/api/auth/**").permitAll()
                         // Permitir acceso a la documentación de la API
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
@@ -72,6 +72,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/customers/**").authenticated()
                         .requestMatchers("/api/customer-fiados/admin/**").hasAuthority("ADMIN")
                         .requestMatchers("/api/customer-fiados/**").authenticated()
+                        .requestMatchers("/api/notifications/test-trigger").hasAuthority("ADMIN")
                         .requestMatchers("/api/notifications/**").authenticated()
                         // Permitir acceso al endpoint de subida de reportes a usuarios autenticados
                         .requestMatchers(HttpMethod.POST, "/api/reports/upload-report").authenticated()

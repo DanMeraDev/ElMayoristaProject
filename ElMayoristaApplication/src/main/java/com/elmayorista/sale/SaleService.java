@@ -49,7 +49,7 @@ public class SaleService {
         // Validar si ya existe una venta con el mismo número de orden
         if (sale.getOrderNumber() != null && saleRepository.existsByOrderNumber(sale.getOrderNumber())) {
             throw new IllegalArgumentException(
-                    "La venta con número de pedido " + sale.getOrderNumber() + " ya existe.");
+                    "Este PDF ya fue subido previamente. La venta con número de pedido " + sale.getOrderNumber() + " ya existe.");
         }
 
         User seller = sale.getSeller();
@@ -65,6 +65,38 @@ public class SaleService {
         sale.setCommissionSettled(false);
 
         sale.setStatus(SaleStatus.PENDING);
+
+        return saleRepository.save(sale);
+    }
+
+    @Transactional
+    public Sale createTvSale(TvSaleCreateDTO dto, User seller) {
+        BigDecimal shipping = dto.getShipping() != null ? dto.getShipping() : BigDecimal.ZERO;
+        BigDecimal total = dto.getPrice().add(shipping);
+
+        Sale sale = Sale.builder()
+                .seller(seller)
+                .saleType(SaleType.TV)
+                .orderNumber("TV-" + System.currentTimeMillis())
+                .customerName(dto.getCustomerName())
+                .customerIdNumber(dto.getCustomerIdNumber())
+                .customerAddress(dto.getCustomerAddress())
+                .customerCity(dto.getCustomerCity())
+                .customerPhone(dto.getCustomerPhone())
+                .customerEmail(dto.getCustomerEmail())
+                .tvSerialNumber(dto.getTvSerialNumber())
+                .tvModel(dto.getTvModel())
+                .subtotal(dto.getPrice())
+                .shipping(shipping)
+                .total(total)
+                .orderDate(LocalDateTime.now())
+                .status(SaleStatus.PENDING)
+                .commissionAmount(BigDecimal.ZERO)
+                .commissionPercentage(
+                        seller.getCommissionPercentage() != null
+                                ? seller.getCommissionPercentage()
+                                : new BigDecimal("5.00"))
+                .build();
 
         return saleRepository.save(sale);
     }

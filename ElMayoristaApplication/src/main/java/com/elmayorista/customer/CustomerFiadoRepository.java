@@ -1,5 +1,6 @@
 package com.elmayorista.customer;
 
+import com.elmayorista.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -12,4 +13,8 @@ public interface CustomerFiadoRepository extends JpaRepository<CustomerFiado, Lo
     List<CustomerFiado> findBySellerIdOrderByCreatedAtDesc(UUID sellerId);
 
     List<CustomerFiado> findAllByOrderByCreatedAtDesc();
+
+    List<CustomerFiado> findBySettledInCycleFalse();
+
+    List<CustomerFiado> findBySellerAndSettledInCycleFalse(User seller);
 }

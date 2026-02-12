@@ -1,6 +1,5 @@
 package com.elmayorista.notification;
 
-import com.elmayorista.dto.NotificationDTO;
 import com.elmayorista.user.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +44,15 @@ public class NotificationController {
         UUID userId = getUserId(authentication);
         notificationService.markAllAsRead(userId);
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Endpoint de prueba (solo ADMIN) para disparar manualmente el scheduler de notificaciones.
+     */
+    @PostMapping("/test-trigger")
+    public ResponseEntity<Map<String, String>> testTrigger() {
+        notificationService.generatePendingSaleReminders();
+        return ResponseEntity.ok(Map.of("message", "Scheduler ejecutado manualmente"));
     }
 
     private UUID getUserId(Authentication authentication) {

@@ -1,8 +1,6 @@
 package com.elmayorista.sale;
 
-import com.elmayorista.dto.Mapper;
-import com.elmayorista.dto.SaleCreateDTO;
-import com.elmayorista.dto.SaleDTO;
+import com.elmayorista.config.Mapper;
 import com.elmayorista.service.PdfExtractionService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserService;
@@ -56,6 +54,17 @@ public class SaleController {
 
         // Guardar venta preliminar
         Sale createdSale = saleService.createSale(sale);
+        return ResponseEntity.ok(mapper.toSaleDTO(createdSale));
+    }
+
+    /**
+     * Crea una venta de televisor (formulario manual)
+     */
+    @PostMapping("/tv")
+    public ResponseEntity<SaleDTO> createTvSale(@Valid @RequestBody TvSaleCreateDTO dto,
+            Authentication authentication) {
+        User seller = getUserFromAuth(authentication);
+        Sale createdSale = saleService.createTvSale(dto, seller);
         return ResponseEntity.ok(mapper.toSaleDTO(createdSale));
     }
 

@@ -1,6 +1,5 @@
 package com.elmayorista.fiado;
 
-import com.elmayorista.dto.FiadoDTO;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
 import lombok.RequiredArgsConstructor;

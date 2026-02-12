@@ -1,7 +1,6 @@
 package com.elmayorista.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.elmayorista.dto.ErrorResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

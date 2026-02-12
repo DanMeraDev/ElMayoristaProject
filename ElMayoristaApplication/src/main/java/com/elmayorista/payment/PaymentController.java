@@ -1,7 +1,5 @@
 package com.elmayorista.payment;
 
-import com.elmayorista.dto.CreatePaymentRequest;
-import com.elmayorista.dto.PaymentDTO;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserService;
 import jakarta.validation.Valid;
