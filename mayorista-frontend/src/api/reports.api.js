@@ -50,3 +50,12 @@ export const registerPaymentWithReceipt = (saleId, amount, paymentMethod, notes,
         },
     });
 };
+
+// Delete a sale (only if seller owns it and status allows)
+export const deleteSale = (saleId) =>
+    axios.delete(`/sales/${saleId}`);
+
+// Delete a payment/receipt (only if seller owns the sale and status allows)
+export const deletePayment = (saleId, paymentId) =>
+    axios.delete(`/payments/${saleId}/payments/${paymentId}`);
+

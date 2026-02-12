@@ -106,6 +106,20 @@ public class UserController {
     }
 
     /**
+     * Actualiza los permisos de crédito de un vendedor
+     * 
+     * @param id      ID del vendedor
+     * @param request DTO con los permisos a actualizar
+     * @return Usuario actualizado
+     */
+    @PutMapping("/{id}/permissions")
+    public ResponseEntity<User> updateSellerPermissions(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdatePermissionsRequest request) {
+        return ResponseEntity.ok(userService.updateSellerPermissions(id, request));
+    }
+
+    /**
      * Elimina un usuario
      * 
      * @param id ID del usuario a eliminar

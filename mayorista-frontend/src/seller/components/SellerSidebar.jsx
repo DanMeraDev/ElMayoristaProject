@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, ShoppingBag, FileText, Info, LogOut, ChevronLeft } from 'lucide-react';
+import { Home, ShoppingBag, FileText, Info, LogOut, ChevronLeft, CreditCard, Users } from 'lucide-react';
 
 function SellerSidebar({ isOpen, setIsOpen, user, onLogout }) {
     const location = useLocation();
@@ -45,13 +45,37 @@ function SellerSidebar({ isOpen, setIsOpen, user, onLogout }) {
                     <span className="text-sm font-medium">Mis Ventas</span>
                 </Link>
 
-                <a href="#" className="flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-white hover:bg-sidebar-hover rounded-lg transition-all group relative">
-                    <FileText className="w-5 h-5 group-hover:text-primary transition-colors" />
-                    <span className="text-sm font-medium">Mis Fiados</span>
-                    <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                        Próximamente
-                    </span>
-                </a>
+                {/* Mis Fiados - Solo visible si tiene permiso canCreditSelf */}
+                {user?.canCreditSelf && (
+                    <Link
+                        to="/seller/mis-fiados"
+                        onClick={() => window.innerWidth < 768 && setIsOpen(false)}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${location.pathname === '/seller/mis-fiados'
+                            ? 'text-slate-100 bg-sidebar-hover'
+                            : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
+                            }`}
+                    >
+                        <CreditCard className={`w-5 h-5 transition-colors ${location.pathname === '/seller/mis-fiados' ? 'text-primary' : 'group-hover:text-primary'
+                            }`} />
+                        <span className="text-sm font-medium">Mis Fiados</span>
+                    </Link>
+                )}
+
+                {/* Fiar a Usuarios - Solo visible si tiene permiso canCreditCustomers */}
+                {user?.canCreditCustomers && (
+                    <Link
+                        to="/seller/fiar-usuarios"
+                        onClick={() => window.innerWidth < 768 && setIsOpen(false)}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${location.pathname === '/seller/fiar-usuarios'
+                            ? 'text-slate-100 bg-sidebar-hover'
+                            : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
+                            }`}
+                    >
+                        <Users className={`w-5 h-5 transition-colors ${location.pathname === '/seller/fiar-usuarios' ? 'text-primary' : 'group-hover:text-primary'
+                            }`} />
+                        <span className="text-sm font-medium">Fiar a Usuarios</span>
+                    </Link>
+                )}
 
                 <div className="pt-4 mt-4 border-t border-slate-600">
                     <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Ayuda</p>

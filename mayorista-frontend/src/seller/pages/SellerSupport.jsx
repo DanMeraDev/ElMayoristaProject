@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useDarkMode } from '../../context/DarkModeContext';
-import { MessageSquare, Bug, Lightbulb, Send, Filter, CheckCircle, Clock, XCircle, Moon, Sun, Bell, ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
+import { MessageSquare, Bug, Lightbulb, Send, Filter, CheckCircle, Clock, XCircle, Moon, Sun, ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
 import SellerSidebar from '../components/SellerSidebar';
 import SellerFooter from '../components/SellerFooter';
+import NotificationBell from '../../components/NotificationBell';
 import { createTicket, getMyTickets } from '../../api/support.api';
 
 const SellerSupport = () => {
@@ -122,7 +123,7 @@ const SellerSupport = () => {
                 />
 
                 {/* Main Content Area */}
-                <main className={`flex-1 h-full overflow-y-auto transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
+                <main className={`flex-1 flex flex-col h-full overflow-y-auto transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
                     {/* Top Header */}
                     <header className="bg-white dark:bg-surface-dark border-b border-gray-200 dark:border-border-dark h-16 flex items-center justify-between px-6 sticky top-0 z-20 shadow-sm transition-colors duration-200">
                         <div className="flex items-center gap-2">
@@ -143,11 +144,12 @@ const SellerSupport = () => {
                             >
                                 {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                             </button>
+                            <NotificationBell />
                         </div>
                     </header>
 
                     {/* Main Content */}
-                    <div className="p-8 max-w-7xl mx-auto">
+                    <div className="p-8 max-w-7xl mx-auto flex-1">
                         <div className="mb-8">
                             <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                 <MessageSquare className="w-8 h-8" />
@@ -187,7 +189,7 @@ const SellerSupport = () => {
                                                 value="BUG"
                                                 checked={formData.type === 'BUG'}
                                                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                                                className="text-primary-600 focus:ring-primary-500"
+                                                className="text-primary focus:ring-primary/50"
                                             />
                                             <Bug className="w-4 h-4 text-red-500" />
                                             <span className="text-sm text-gray-700 dark:text-gray-300">Bug</span>
@@ -199,7 +201,7 @@ const SellerSupport = () => {
                                                 value="RECOMMENDATION"
                                                 checked={formData.type === 'RECOMMENDATION'}
                                                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                                                className="text-primary-600 focus:ring-primary-500"
+                                                className="text-primary focus:ring-primary/50"
                                             />
                                             <Lightbulb className="w-4 h-4 text-yellow-500" />
                                             <span className="text-sm text-gray-700 dark:text-gray-300">Recomendación</span>
@@ -211,7 +213,7 @@ const SellerSupport = () => {
                                                 value="OTHER"
                                                 checked={formData.type === 'OTHER'}
                                                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                                                className="text-primary-600 focus:ring-primary-500"
+                                                className="text-primary focus:ring-primary/50"
                                             />
                                             <MessageSquare className="w-4 h-4 text-blue-500" />
                                             <span className="text-sm text-gray-700 dark:text-gray-300">Otro</span>
@@ -230,7 +232,7 @@ const SellerSupport = () => {
                                         placeholder="Describe brevemente el problema o sugerencia"
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
                                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                                                 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                                 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                                         required
                                         maxLength="200"
                                     />
@@ -247,7 +249,7 @@ const SellerSupport = () => {
                                         rows="5"
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
                                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                                                 focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                                                 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
                                         required
                                     />
                                 </div>
@@ -255,7 +257,7 @@ const SellerSupport = () => {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="w-full bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-6 
+                                    className="w-full bg-primary hover:bg-primary-hover text-white font-semibold py-3 px-6
                                              rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed
                                              flex items-center justify-center gap-2"
                                 >
@@ -279,7 +281,7 @@ const SellerSupport = () => {
                                         onChange={(e) => setFilter(e.target.value)}
                                         className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg
                                                  bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm
-                                                 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                                 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                                     >
                                         <option value="ALL">Todos</option>
                                         <option value="BUG">Bugs</option>

@@ -1,6 +1,9 @@
 package com.elmayorista.report;
 
 import com.elmayorista.dto.CycleDTO;
+import com.elmayorista.fiado.Fiado;
+import com.elmayorista.fiado.FiadoRepository;
+import com.elmayorista.fiado.FiadoStatus;
 import com.elmayorista.payment.Payment;
 import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleRepository;
@@ -37,6 +40,7 @@ public class CycleService {
     private final SaleRepository saleRepository;
     private final CycleRepository cycleRepository;
     private final FileStorageService fileStorageService;
+    private final FiadoRepository fiadoRepository;
 
     /**
      * Get current cycle statistics (pending to close).
@@ -155,6 +159,21 @@ public class CycleService {
             sale.setCommissionSettled(true);
         }
         saleRepository.saveAll(sales);
+
+        // Settle pending fiados for all sellers in this cycle
+        Map<User, List<Sale>> salesBySellerForFiados = sales.stream()
+                .collect(Collectors.groupingBy(Sale::getSeller));
+        for (User seller : salesBySellerForFiados.keySet()) {
+            List<Fiado> unsettledFiados = fiadoRepository.findBySellerAndSettledInCycleFalse(seller);
+            for (Fiado fiado : unsettledFiados) {
+                fiado.setStatus(FiadoStatus.SETTLED);
+                fiado.setSettledInCycle(true);
+            }
+            if (!unsettledFiados.isEmpty()) {
+                fiadoRepository.saveAll(unsettledFiados);
+                log.info("Settled {} fiados for seller: {}", unsettledFiados.size(), seller.getFullName());
+            }
+        }
 
         return excelReport;
     }
@@ -285,7 +304,12 @@ public class CycleService {
 
             // ========== INDIVIDUAL SELLER SHEETS ==========
             for (Map.Entry<User, List<Sale>> entry : salesBySeller.entrySet()) {
-                createSellerSheet(workbook, entry.getKey(), entry.getValue(), headerStyle, currencyStyle,
+                User seller = entry.getKey();
+                List<Fiado> sellerFiados = fiadoRepository.findBySellerAndSettledInCycleFalse(seller);
+                BigDecimal totalFiados = sellerFiados.stream()
+                        .map(Fiado::getPrice)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                createSellerSheet(workbook, seller, entry.getValue(), totalFiados, headerStyle, currencyStyle,
                         commissionStyle, toReceiveStyle);
             }
 
@@ -299,7 +323,7 @@ public class CycleService {
      * Create individual seller sheet with sale details.
      */
     private void createSellerSheet(Workbook workbook, User seller, List<Sale> sellerSales,
-            CellStyle headerStyle, CellStyle currencyStyle,
+            BigDecimal totalFiados, CellStyle headerStyle, CellStyle currencyStyle,
             CellStyle commissionStyle, CellStyle toReceiveStyle) {
         // Create sheet with seller's name (sanitize for Excel sheet name)
         String sheetName = seller.getFullName().replaceAll("[\\\\/:*?\"<>|]", "_");
@@ -380,7 +404,7 @@ public class CycleService {
 
         // Add summary rows at the bottom
         addSellerSummaryRows(sellerSheet, sellerRowNum, seller, sellerSubtotal, sellerShipping,
-                sellerTotal, currencyStyle, commissionStyle, toReceiveStyle);
+                sellerTotal, totalFiados, currencyStyle, commissionStyle, toReceiveStyle);
 
         // Auto-size columns
         for (int i = 0; i < sellerHeaders.length; i++) {
@@ -394,7 +418,7 @@ public class CycleService {
      */
     private void addSellerSummaryRows(Sheet sheet, int startRow, User seller,
             BigDecimal subtotal, BigDecimal shipping, BigDecimal total,
-            CellStyle currencyStyle, CellStyle commissionStyle, CellStyle toReceiveStyle) {
+            BigDecimal totalFiados, CellStyle currencyStyle, CellStyle commissionStyle, CellStyle toReceiveStyle) {
         // Total en ventas row
         Row totalRow = sheet.createRow(startRow);
         totalRow.createCell(0).setCellValue("total en ventas");
@@ -425,19 +449,54 @@ public class CycleService {
         commCell.setCellStyle(commissionStyle);
 
         // Adelantos row
+        CellStyle adelantosStyle = sheet.getWorkbook().createCellStyle();
+        adelantosStyle.cloneStyleFrom(currencyStyle);
+        adelantosStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+        adelantosStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
         Row adelantosRow = sheet.createRow(startRow + 2);
         adelantosRow.createCell(0).setCellValue("adelantos");
 
-        // A favor row
+        Cell adelantosCell = adelantosRow.createCell(2);
+        adelantosCell.setCellValue(totalFiados.doubleValue());
+        adelantosCell.setCellStyle(adelantosStyle);
+
+        // A favor row - only shows when seller has excess commission after fiados
         Row aFavorRow = sheet.createRow(startRow + 3);
         aFavorRow.createCell(0).setCellValue("a favor");
 
+        if (commissionAmount.compareTo(totalFiados) > 0) {
+            Cell aFavorCell = aFavorRow.createCell(2);
+            aFavorCell.setCellValue(commissionAmount.subtract(totalFiados).doubleValue());
+            aFavorCell.setCellStyle(currencyStyle);
+        }
+
+        // Debe row - only shows when fiados exceed commission (seller owes)
+        Row debeRow = sheet.createRow(startRow + 4);
+        debeRow.createCell(0).setCellValue("debe");
+
+        if (totalFiados.compareTo(commissionAmount) > 0) {
+            CellStyle debeStyle = sheet.getWorkbook().createCellStyle();
+            debeStyle.cloneStyleFrom(currencyStyle);
+            debeStyle.setFillForegroundColor(IndexedColors.RED.getIndex());
+            debeStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            Font whiteFont = sheet.getWorkbook().createFont();
+            whiteFont.setColor(IndexedColors.WHITE.getIndex());
+            debeStyle.setFont(whiteFont);
+
+            Cell debeCell = debeRow.createCell(2);
+            debeCell.setCellValue(totalFiados.subtract(commissionAmount).doubleValue());
+            debeCell.setCellStyle(debeStyle);
+        }
+
         // A recibir row
-        Row aRecibirRow = sheet.createRow(startRow + 4);
+        BigDecimal toReceive = commissionAmount.subtract(totalFiados).max(BigDecimal.ZERO);
+
+        Row aRecibirRow = sheet.createRow(startRow + 5);
         aRecibirRow.createCell(0).setCellValue("a recibir");
 
         Cell toReceiveCell = aRecibirRow.createCell(2);
-        toReceiveCell.setCellValue(commissionAmount.doubleValue());
+        toReceiveCell.setCellValue(toReceive.doubleValue());
         toReceiveCell.setCellStyle(toReceiveStyle);
     }
 

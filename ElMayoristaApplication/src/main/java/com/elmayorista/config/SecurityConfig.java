@@ -66,6 +66,13 @@ public class SecurityConfig {
                         // Proteger los endpoints de soporte. Allow any authenticated user.
                         // The controller handles user-specific logic via @AuthenticationPrincipal
                         .requestMatchers("/api/support/**").authenticated()
+                        .requestMatchers("/api/fiados/admin/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/fiados/**").authenticated()
+                        .requestMatchers("/api/customers/admin/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/customers/**").authenticated()
+                        .requestMatchers("/api/customer-fiados/admin/**").hasAuthority("ADMIN")
+                        .requestMatchers("/api/customer-fiados/**").authenticated()
+                        .requestMatchers("/api/notifications/**").authenticated()
                         // Permitir acceso al endpoint de subida de reportes a usuarios autenticados
                         .requestMatchers(HttpMethod.POST, "/api/reports/upload-report").authenticated()
                         // Todas las demás peticiones deben estar autenticadas.

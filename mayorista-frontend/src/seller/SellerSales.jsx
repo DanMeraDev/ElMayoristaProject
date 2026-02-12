@@ -4,15 +4,16 @@ import { useDarkMode } from '../context/DarkModeContext';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import {
     FileText, ChevronRight, DollarSign, LogOut, ShoppingBag,
-    Percent, X, Eye, Calendar, Search, Filter, TrendingUp, Package, Moon, Sun, Bell,
+    Percent, X, Eye, Calendar, Search, Filter, TrendingUp, Package, Moon, Sun,
     PlusCircle, Hourglass, FileSearch, CheckCircle, XCircle, Info, Upload, ArrowRight,
-    ExternalLink, ShieldCheck, Mail, Phone, Loader2, ImageIcon, Camera, Clock, AlertCircle
+    ExternalLink, ShieldCheck, Mail, Phone, Loader2, ImageIcon, Camera, Clock, AlertCircle, Trash2
 } from 'lucide-react';
-import { getMySales, getMyCommission, getMyProfile, getSaleDetails, registerPaymentWithReceipt, uploadReport, getCommissionStats } from '../api/reports.api';
+import { getMySales, getMyCommission, getMyProfile, getSaleDetails, registerPaymentWithReceipt, uploadReport, getCommissionStats, deleteSale, deletePayment } from '../api/reports.api';
 import SellerSidebar from './components/SellerSidebar';
 import SellerFooter from './components/SellerFooter';
 import SalesUploadModal from './components/SalesUploadModal';
 import PendingSalesPanel from './components/PendingSalesPanel';
+import NotificationBell from '../components/NotificationBell';
 
 function SellerSales() {
     const { user, logout } = useAuth();
@@ -52,6 +53,11 @@ function SellerSales() {
     // Search and filter
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [minPrice, setMinPrice] = useState('');
+    const [maxPrice, setMaxPrice] = useState('');
 
     // Receipt upload state
     const [saleForReceipt, setSaleForReceipt] = useState(null);
@@ -73,6 +79,20 @@ function SellerSales() {
     const [showPendingSalesPanel, setShowPendingSalesPanel] = useState(false);
     const fileInputRef = useRef(null);
 
+    // Delete confirmation modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [saleToDelete, setSaleToDelete] = useState(null);
+    const [isDeletingSale, setIsDeletingSale] = useState(false);
+
+    // Delete payment modal state
+    const [showDeletePaymentModal, setShowDeletePaymentModal] = useState(false);
+    const [paymentToDelete, setPaymentToDelete] = useState(null);
+    const [isDeletingPayment, setIsDeletingPayment] = useState(false);
+
+    // Sale details with payments
+    const [saleDetails, setSaleDetails] = useState(null);
+    const [loadingSaleDetails, setLoadingSaleDetails] = useState(false);
+
     // Load data on mount
     useEffect(() => {
         const userId = user?.userId || user?.id;
@@ -82,6 +102,15 @@ function SellerSales() {
             loadCommission();
         }
     }, [currentPage, user?.id]);
+
+    // Load sale details when a sale is selected
+    useEffect(() => {
+        if (selectedSale) {
+            loadSaleDetails(selectedSale.id);
+        } else {
+            setSaleDetails(null);
+        }
+    }, [selectedSale]);
 
     const loadUserProfile = async () => {
         const userId = user?.userId || user?.id;
@@ -134,10 +163,8 @@ function SellerSales() {
             const statsResponse = await getCommissionStats(userId);
             if (statsResponse.data) {
                 setCommissionStats(statsResponse.data);
-                // Use total commission (earned + received) for "Comisión Mes" per user request
-                // Before it was only earnedCommission (unsettled), but user wants to see historic too after settlement.
-                const totalComm = (statsResponse.data.earnedCommission || 0) + (statsResponse.data.receivedCommission || 0);
-                setMonthlyCommission(totalComm);
+                // Only use earnedCommission (unsettled) for "Comisión Mes" - resets when admin closes cycle
+                setMonthlyCommission(statsResponse.data.earnedCommission || 0);
             } else {
                 // Fallback to simple commission if stats fails or is empty
                 const response = await getMyCommission(userId);
@@ -222,6 +249,19 @@ function SellerSales() {
             case 'IN_REVIEW': return 'En Revisión';
             case 'REJECTED': return 'Rechazada';
             default: return status || 'Pendiente';
+        }
+    };
+
+    const getPaymentMethodLabel = (method) => {
+        switch (method?.toUpperCase()) {
+            case 'BANK_TRANSFER': return 'Transferencia Bancaria';
+            case 'CASH': return 'Efectivo';
+            case 'CREDIT_CARD': return 'Tarjeta de Crédito';
+            case 'DEBIT_CARD': return 'Tarjeta de Débito';
+            case 'CHECK': return 'Cheque';
+            case 'PAYPAL': return 'PayPal';
+            case 'OTHER': return 'Otro';
+            default: return method || 'Transferencia Bancaria';
         }
     };
 
@@ -347,7 +387,98 @@ function SellerSales() {
         setLoadingSaleInfo(false);
     };
 
-    // Filter sales based on search and status
+    // Delete sale handlers
+    const openDeleteModal = (sale) => {
+        setSaleToDelete(sale);
+        setShowDeleteModal(true);
+    };
+
+    const closeDeleteModal = () => {
+        setSaleToDelete(null);
+        setShowDeleteModal(false);
+    };
+
+    const handleDeleteSale = async () => {
+        if (!saleToDelete) return;
+
+        setIsDeletingSale(true);
+        try {
+            await deleteSale(saleToDelete.id);
+
+            // Remove sale from local state
+            setSales(prevSales => prevSales.filter(s => s.id !== saleToDelete.id));
+
+            // Update totals
+            setTotalElements(prev => prev - 1);
+
+            // Reload commission stats
+            loadCommission();
+
+            closeDeleteModal();
+        } catch (err) {
+            console.error('Error deleting sale:', err);
+            alert(err.response?.data?.message || 'Error al eliminar la venta. Verifica que el estado lo permita.');
+        } finally {
+            setIsDeletingSale(false);
+        }
+    };
+
+    // Check if a sale can be deleted (only PENDING or REJECTED)
+    const canDeleteSale = (sale) => {
+        const status = sale.status?.toUpperCase();
+        return status === 'PENDING' || status === 'REJECTED';
+    };
+
+    // Load full sale details with payments
+    const loadSaleDetails = async (saleId) => {
+        setLoadingSaleDetails(true);
+        try {
+            const response = await getSaleDetails(saleId);
+            setSaleDetails(response.data);
+        } catch (err) {
+            console.error('Error loading sale details:', err);
+            setSaleDetails(null);
+        } finally {
+            setLoadingSaleDetails(false);
+        }
+    };
+
+    // Delete payment handlers
+    const openDeletePaymentModal = (payment) => {
+        setPaymentToDelete(payment);
+        setShowDeletePaymentModal(true);
+    };
+
+    const closeDeletePaymentModal = () => {
+        setPaymentToDelete(null);
+        setShowDeletePaymentModal(false);
+    };
+
+    const handleDeletePayment = async () => {
+        if (!paymentToDelete || !selectedSale) return;
+
+        setIsDeletingPayment(true);
+        try {
+            await deletePayment(selectedSale.id, paymentToDelete.id);
+
+            // Reload sale details to get updated payments
+            await loadSaleDetails(selectedSale.id);
+
+            // Reload sales list and commission
+            loadSales();
+            loadCommission();
+
+            closeDeletePaymentModal();
+        } catch (err) {
+            console.error('Error deleting payment:', err);
+            alert(err.response?.data?.message || 'Error al eliminar el comprobante. Verifica que el estado lo permita.');
+        } finally {
+            setIsDeletingPayment(false);
+        }
+    };
+
+
+    // Filter sales based on all criteria
     const filteredSales = sales.filter(sale => {
         const matchesSearch = searchTerm === '' ||
             (sale.orderNumber?.toString().includes(searchTerm)) ||
@@ -357,8 +488,27 @@ function SellerSales() {
         const matchesStatus = statusFilter === 'ALL' ||
             sale.status?.toUpperCase() === statusFilter;
 
-        return matchesSearch && matchesStatus;
+        // Date filter
+        const saleDate = new Date(sale.orderDate || sale.date || sale.createdAt);
+        const matchesStartDate = !startDate || saleDate >= new Date(startDate);
+        const matchesEndDate = !endDate || saleDate <= new Date(endDate + 'T23:59:59');
+
+        // Price filter
+        const saleTotal = sale.total || sale.totalAmount || 0;
+        const matchesMinPrice = !minPrice || saleTotal >= parseFloat(minPrice);
+        const matchesMaxPrice = !maxPrice || saleTotal <= parseFloat(maxPrice);
+
+        return matchesSearch && matchesStatus && matchesStartDate && matchesEndDate && matchesMinPrice && matchesMaxPrice;
     });
+
+    const clearAllFilters = () => {
+        setSearchTerm('');
+        setStatusFilter('ALL');
+        setStartDate('');
+        setEndDate('');
+        setMinPrice('');
+        setMaxPrice('');
+    };
 
     // Calculate totals
     // Calculate totals
@@ -384,6 +534,28 @@ function SellerSales() {
     return (
         <div className="bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100 font-sans min-h-screen flex flex-col transition-colors duration-200">
             <style>{`
+                /* Hide number input arrows */
+                input[type="number"]::-webkit-inner-spin-button,
+                input[type="number"]::-webkit-outer-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                }
+                input[type="number"] {
+                    -moz-appearance: textfield;
+                }
+                /* Custom date input styling */
+                input[type="date"] {
+                    position: relative;
+                    cursor: pointer;
+                }
+                input[type="date"]::-webkit-calendar-picker-indicator {
+                    cursor: pointer;
+                    opacity: 0.6;
+                    transition: opacity 0.2s;
+                }
+                input[type="date"]::-webkit-calendar-picker-indicator:hover {
+                    opacity: 1;
+                }
                 .progress-bar-striped {
                     background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
                     background-size: 1rem 1rem;
@@ -450,10 +622,7 @@ function SellerSales() {
                                 >
                                     {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                                 </button>
-                                <button className="relative p-2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 transition-colors">
-                                    <Bell className="w-5 h-5" />
-                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-surface-dark"></span>
-                                </button>
+                                <NotificationBell />
                             </div>
                         </div>
                     </header>
@@ -523,21 +692,120 @@ function SellerSales() {
                             </div>
                         </div>
 
-                        <div className="bg-white dark:bg-surface-dark rounded-t-xl border border-b-0 border-gray-200 dark:border-gray-700 p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-                            <div className="relative w-full md:w-96">
-                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500 dark:text-gray-400">
-                                    <Search className="w-5 h-5" />
-                                </span>
-                                <input
-                                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-mayorista-red focus:border-mayorista-red sm:text-sm transition-colors"
-                                    placeholder="Buscar por ID, cliente o estado..."
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
+                        <div className="bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                            <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="relative w-full md:w-96">
+                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500 dark:text-gray-400">
+                                        <Search className="w-5 h-5" />
+                                    </span>
+                                    <input
+                                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm transition-colors"
+                                        placeholder="Buscar por ID, cliente o estado..."
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${showAdvancedFilters ? 'bg-primary text-white shadow-sm' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                    >
+                                        <Filter className="w-4 h-4" />
+                                        Filtros Avanzados
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 overflow-x-auto pb-4 md:pb-0 custom-scrollbar">
-                                <button onClick={() => setStatusFilter('ALL')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${statusFilter === 'ALL' ? 'bg-mayorista-red text-white shadow-sm' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>Todos</button>
+
+                            {/* Advanced Filters Panel */}
+                            {showAdvancedFilters && (
+                                <div className="px-4 sm:px-5 pb-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Date Range Filter */}
+                                        <div className="space-y-3">
+                                            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                                <Calendar className="w-4 h-4" />
+                                                Rango de Fechas
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block font-medium">Desde</label>
+                                                    <input
+                                                        type="date"
+                                                        value={startDate}
+                                                        onChange={(e) => setStartDate(e.target.value)}
+                                                        className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all shadow-sm"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block font-medium">Hasta</label>
+                                                    <input
+                                                        type="date"
+                                                        value={endDate}
+                                                        onChange={(e) => setEndDate(e.target.value)}
+                                                        className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all shadow-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Price Range Filter */}
+                                        <div className="space-y-3">
+                                            <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                                                <DollarSign className="w-4 h-4" />
+                                                Rango de Precios
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block font-medium">Mínimo</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm">$</span>
+                                                        <input
+                                                            type="number"
+                                                            placeholder="0.00"
+                                                            value={minPrice}
+                                                            onChange={(e) => setMinPrice(e.target.value)}
+                                                            className="w-full pl-7 pr-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all shadow-sm"
+                                                            min="0"
+                                                            step="0.01"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block font-medium">Máximo</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-sm">$</span>
+                                                        <input
+                                                            type="number"
+                                                            placeholder="9999.99"
+                                                            value={maxPrice}
+                                                            onChange={(e) => setMaxPrice(e.target.value)}
+                                                            className="w-full pl-7 pr-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all shadow-sm"
+                                                            min="0"
+                                                            step="0.01"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Clear Filters Button */}
+                                    <div className="mt-4 flex justify-end">
+                                        <button
+                                            onClick={clearAllFilters}
+                                            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <X className="w-4 h-4" />
+                                            Limpiar Filtros
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Status Filter Buttons */}
+                            <div className="px-4 sm:px-5 pb-4 flex items-center gap-2 overflow-x-auto">
+                                <button onClick={() => setStatusFilter('ALL')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${statusFilter === 'ALL' ? 'bg-primary text-white shadow-sm' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>Todos</button>
                                 <button onClick={() => setStatusFilter('PENDING')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${statusFilter === 'PENDING' ? 'bg-yellow-500 text-white shadow-sm' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                                     <Hourglass className={`w-4 h-4 ${statusFilter === 'PENDING' ? 'text-white' : 'text-yellow-500'}`} /> Pendiente
                                 </button>
@@ -553,7 +821,7 @@ function SellerSales() {
                             </div>
                         </div>
 
-                        <div className="bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-b-xl overflow-hidden shadow-sm">
+                        <div className="bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm mt-6">
                             <div className="overflow-x-auto">
                                 {salesLoading ? (
                                     <div className="text-center py-12">
@@ -619,6 +887,15 @@ function SellerSales() {
                                                                     >
                                                                         <Upload className="w-4 h-4" />
                                                                         Subir Comprobante
+                                                                    </button>
+                                                                )}
+                                                                {canDeleteSale(sale) && (
+                                                                    <button
+                                                                        onClick={() => openDeleteModal(sale)}
+                                                                        className="text-red-400 hover:text-red-600 dark:hover:text-red-400 p-2 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                                                        title="Eliminar venta"
+                                                                    >
+                                                                        <Trash2 className="w-5 h-5" />
                                                                     </button>
                                                                 )}
                                                                 <button
@@ -794,15 +1071,72 @@ function SellerSales() {
                                     </div>
                                 </div>
 
-                                {/* Receipt Image */}
-                                {selectedSale.receiptImageUrl && (
+                                {/* Payments/Receipts Section */}
+                                {loadingSaleDetails ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                                        <span className="ml-2 text-gray-500 dark:text-gray-400">Cargando comprobantes...</span>
+                                    </div>
+                                ) : saleDetails?.payments && saleDetails.payments.length > 0 ? (
                                     <div>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Comprobante</p>
-                                        <img
-                                            src={selectedSale.receiptImageUrl}
-                                            alt="Comprobante"
-                                            className="rounded-lg max-w-full h-auto border border-gray-200 dark:border-gray-700"
-                                        />
+                                        <div className="flex items-center justify-between mb-3">
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Comprobantes de Pago ({saleDetails.payments.length})
+                                            </p>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {saleDetails.payments.map((payment, index) => (
+                                                <div key={payment.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                                                                    Comprobante #{index + 1}
+                                                                </span>
+                                                                <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                                                                    {getPaymentMethodLabel(payment.paymentMethod)}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm font-bold text-gray-900 dark:text-white">
+                                                                {formatCurrency(payment.amount)}
+                                                            </p>
+                                                            {payment.notes && (
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                                    {payment.notes}
+                                                                </p>
+                                                            )}
+                                                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                                                {formatDate(payment.paymentDate || payment.createdAt)}
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => openDeletePaymentModal(payment)}
+                                                            className="text-red-400 hover:text-red-600 dark:hover:text-red-400 p-2 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                                            title="Eliminar comprobante"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                    {payment.receiptUrl && (
+                                                        <div className="mt-2">
+                                                            <img
+                                                                src={payment.receiptUrl}
+                                                                alt={`Comprobante ${index + 1}`}
+                                                                className="rounded-lg max-w-full h-auto border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-90 transition-opacity"
+                                                                onClick={() => window.open(payment.receiptUrl, '_blank')}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-start gap-2">
+                                        <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                                        <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                            No hay comprobantes de pago registrados para esta venta.
+                                        </p>
                                     </div>
                                 )}
 
@@ -1152,7 +1486,11 @@ function SellerSales() {
             {/* PDF Upload Modal */}
             <SalesUploadModal
                 isOpen={showUploadModal}
-                onClose={() => setShowUploadModal(false)}
+                onClose={() => {
+                    setShowUploadModal(false);
+                    loadSales();
+                    loadCommission();
+                }}
                 onUploadSuccess={handleUploadSuccess}
             />
 
@@ -1163,6 +1501,212 @@ function SellerSales() {
                 pendingSales={sales.filter(sale => (sale.status?.toUpperCase() === 'PENDING' || sale.status?.toUpperCase() === 'REJECTED') && sale.paymentStatus !== 'PAID')}
                 onUploadReceipt={openReceiptModal}
             />
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && saleToDelete && (
+                <div className="fixed inset-0 z-50 overflow-y-auto">
+                    <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        {/* Background overlay */}
+                        <div
+                            className="fixed inset-0 transition-opacity bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75"
+                            onClick={closeDeleteModal}
+                        ></div>
+
+                        {/* Modal panel */}
+                        <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                            {/* Header */}
+                            <div className="bg-red-50 dark:bg-red-900/20 px-6 py-4 border-b border-red-200 dark:border-red-800">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                                        <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-red-900 dark:text-red-100">
+                                            Confirmar Eliminación
+                                        </h3>
+                                        <p className="text-sm text-red-700 dark:text-red-300">
+                                            Esta acción no se puede deshacer
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Body */}
+                            <div className="px-6 py-5 space-y-4">
+                                <p className="text-gray-700 dark:text-gray-300">
+                                    ¿Estás seguro de que deseas eliminar esta venta?
+                                </p>
+
+                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Venta:</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            #{saleToDelete.orderNumber || saleToDelete.id}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Cliente:</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {saleToDelete.customerName || 'Cliente General'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Monto:</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {formatCurrency(saleToDelete.total || saleToDelete.totalAmount)}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Estado:</span>
+                                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getStatusColor(saleToDelete.status)}`}>
+                                            {getStatusLabel(saleToDelete.status)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 flex items-start gap-2">
+                                    <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                        Al eliminar esta venta, se eliminarán también todos los comprobantes de pago asociados.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 flex gap-3 justify-end border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    onClick={closeDeleteModal}
+                                    disabled={isDeletingSale}
+                                    className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleDeleteSale}
+                                    disabled={isDeletingSale}
+                                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {isDeletingSale ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Eliminando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Trash2 className="w-4 h-4" />
+                                            Eliminar Venta
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Payment Confirmation Modal */}
+            {showDeletePaymentModal && paymentToDelete && (
+                <div className="fixed inset-0 z-[70] overflow-y-auto">
+                    <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        {/* Background overlay */}
+                        <div
+                            className="fixed inset-0 transition-opacity bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75"
+                            onClick={closeDeletePaymentModal}
+                        ></div>
+
+                        {/* Modal panel */}
+                        <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                            {/* Header */}
+                            <div className="bg-red-50 dark:bg-red-900/20 px-6 py-4 border-b border-red-200 dark:border-red-800">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                                        <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-red-900 dark:text-red-100">
+                                            Eliminar Comprobante
+                                        </h3>
+                                        <p className="text-sm text-red-700 dark:text-red-300">
+                                            Esta acción no se puede deshacer
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Body */}
+                            <div className="px-6 py-5 space-y-4">
+                                <p className="text-gray-700 dark:text-gray-300">
+                                    ¿Estás seguro de que deseas eliminar este comprobante de pago?
+                                </p>
+
+                                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Monto:</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {formatCurrency(paymentToDelete.amount)}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Método:</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {getPaymentMethodLabel(paymentToDelete.paymentMethod)}
+                                        </span>
+                                    </div>
+                                    {paymentToDelete.notes && (
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600 dark:text-gray-400">Notas:</span>
+                                            <span className="font-semibold text-gray-900 dark:text-white">
+                                                {paymentToDelete.notes}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Fecha:</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {formatDate(paymentToDelete.paymentDate || paymentToDelete.createdAt)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 flex items-start gap-2">
+                                    <Info className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                        Al eliminar este comprobante, se recalculará el estado de pago de la venta.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 flex gap-3 justify-end border-t border-gray-200 dark:border-gray-700">
+                                <button
+                                    onClick={closeDeletePaymentModal}
+                                    disabled={isDeletingPayment}
+                                    className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleDeletePayment}
+                                    disabled={isDeletingPayment}
+                                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {isDeletingPayment ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Eliminando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Trash2 className="w-4 h-4" />
+                                            Eliminar Comprobante
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }

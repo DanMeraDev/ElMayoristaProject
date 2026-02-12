@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import {
     Users,
@@ -10,7 +10,6 @@ import {
     MoreVertical,
     Mail,
     Phone,
-    Bell,
     Moon,
     Sun,
     LayoutDashboard,
@@ -26,6 +25,7 @@ import { useDarkMode } from '../context/DarkModeContext';
 import { getAllSellers, approveSeller, getPendingSellers, getSalesUnderReview, toggleSellerEnabled } from '../api/admin.api';
 import AdminFooter from './components/AdminFooter';
 import AdminSidebar from './components/AdminSidebar';
+import NotificationBell from '../components/NotificationBell';
 
 function SellersList() {
     const { user, logout } = useAuth();
@@ -52,6 +52,8 @@ function SellersList() {
     const [notification, setNotification] = useState(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [openActionsMenu, setOpenActionsMenu] = useState(null);
+    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+    const menuButtonRef = useRef(null);
 
     const showNotification = (type, message) => {
         setNotification({ type, message });
@@ -242,12 +244,7 @@ function SellersList() {
                         <span className="font-medium text-slate-900 dark:text-white">Gestión de Vendedores</span>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button className="relative p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                            <Bell className="w-5 h-5" />
-                            {stats.pendingRequests > 0 && (
-                                <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-white dark:ring-surface-dark"></span>
-                            )}
-                        </button>
+                        <NotificationBell />
                         <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
                         <button
                             onClick={toggleDarkMode}
@@ -416,7 +413,13 @@ function SellersList() {
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                setOpenActionsMenu(openActionsMenu === seller.id ? null : seller.id);
+                                                                if (openActionsMenu === seller.id) {
+                                                                    setOpenActionsMenu(null);
+                                                                } else {
+                                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                                    setMenuPosition({ top: rect.bottom + 4, left: rect.right - 192 });
+                                                                    setOpenActionsMenu(seller.id);
+                                                                }
                                                             }}
                                                             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
                                                         >
@@ -425,7 +428,10 @@ function SellersList() {
 
                                                         {/* Dropdown Menu */}
                                                         {openActionsMenu === seller.id && (
-                                                            <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-surface-dark rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 py-1">
+                                                            <div
+                                                                className="fixed w-48 bg-white dark:bg-surface-dark rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 py-1"
+                                                                style={{ top: menuPosition.top, left: menuPosition.left }}
+                                                            >
                                                                 <button
                                                                     onClick={() => {
                                                                         setOpenActionsMenu(null);

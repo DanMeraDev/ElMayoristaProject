@@ -12,7 +12,6 @@ import {
     Calendar,
     Eye,
     X,
-    Bell,
     Moon,
     Sun,
     LayoutDashboard,
@@ -27,6 +26,7 @@ import { getUserById, getUserCommission, getUserSales, getPendingSellers, getSal
 import AdminFooter from './components/AdminFooter';
 import SaleDetailModal from '../components/SaleDetailModal';
 import AdminSidebar from './components/AdminSidebar';
+import NotificationBell from '../components/NotificationBell';
 
 function SellerDetails() {
     const { id } = useParams();
@@ -239,12 +239,7 @@ function SellerDetails() {
                         <span className="font-medium text-slate-900 dark:text-white">{seller?.fullName}</span>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button className="relative p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                            <Bell className="w-5 h-5" />
-                            {stats.pendingRequests > 0 && (
-                                <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-white dark:ring-surface-dark"></span>
-                            )}
-                        </button>
+                        <NotificationBell />
                         <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
                         <button
                             onClick={toggleDarkMode}

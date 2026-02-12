@@ -65,6 +65,16 @@ public class SaleController {
         return ResponseEntity.ok(mapper.toSaleDTO(sale));
     }
 
+    /**
+     * Elimina una venta (solo si el vendedor es el dueño y el estado lo permite)
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteSale(@PathVariable Long id, Authentication authentication) {
+        User seller = getUserFromAuth(authentication);
+        saleService.deleteSale(id, seller.getId());
+        return ResponseEntity.noContent().build();
+    }
+
     private User getUserFromAuth(Authentication authentication) {
         // Asumiendo que el principal es el email o UserDetails
         String email = authentication.getName();

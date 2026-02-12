@@ -26,7 +26,6 @@ import {
   Receipt,
   Settings,
   HelpCircle,
-  Bell,
   Moon,
   TrendingUp,
   Wallet,
@@ -38,6 +37,7 @@ import SellerSidebar from './components/SellerSidebar';
 import SellerFooter from './components/SellerFooter';
 import SalesUploadModal from './components/SalesUploadModal';
 import PendingSalesPanel from './components/PendingSalesPanel';
+import NotificationBell from '../components/NotificationBell';
 
 
 function SellerHome() {
@@ -74,6 +74,11 @@ function SellerHome() {
   // Pending sales panel state
   const [showPendingSalesPanel, setShowPendingSalesPanel] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Sales filter state
+  const [salesStatusFilter, setSalesStatusFilter] = useState('ALL');
+  const [salesSortBy, setSalesSortBy] = useState('date_newest');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   // Commission state
   const [monthlyCommission, setMonthlyCommission] = useState(0);
@@ -409,6 +414,35 @@ function SellerHome() {
     setLoadingSaleInfo(false);
   };
 
+  // Filtered and sorted sales for the preview table
+  const filteredSales = mySales
+    .filter(sale => {
+      if (salesStatusFilter === 'ALL') return true;
+      return sale.status?.toUpperCase() === salesStatusFilter;
+    })
+    .sort((a, b) => {
+      switch (salesSortBy) {
+        case 'date_oldest': {
+          const dateA = new Date(a.orderDate || a.date || a.createdAt || 0);
+          const dateB = new Date(b.orderDate || b.date || b.createdAt || 0);
+          return dateA - dateB;
+        }
+        case 'price_highest': {
+          return (b.total || b.totalAmount || 0) - (a.total || a.totalAmount || 0);
+        }
+        case 'price_lowest': {
+          return (a.total || a.totalAmount || 0) - (b.total || b.totalAmount || 0);
+        }
+        default: { // date_newest
+          const dateA = new Date(a.orderDate || a.date || a.createdAt || 0);
+          const dateB = new Date(b.orderDate || b.date || b.createdAt || 0);
+          return dateB - dateA;
+        }
+      }
+    });
+
+  const activeFilterCount = (salesStatusFilter !== 'ALL' ? 1 : 0) + (salesSortBy !== 'date_newest' ? 1 : 0);
+
   // Use the commission percentage loaded from user profile API
   const userCommission = commissionPercentage;
 
@@ -453,12 +487,7 @@ function SellerHome() {
               >
                 {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
-              <button className="p-2 text-gray-400 hover:text-primary dark:text-slate-400 dark:hover:text-white rounded-full hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors relative">
-                <Bell className="w-5 h-5" />
-                {pendingSalesCount > 0 && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary ring-2 ring-white"></span>
-                )}
-              </button>
+              <NotificationBell />
             </div>
           </header>
 
@@ -582,10 +611,63 @@ function SellerHome() {
                   <p className="text-sm text-gray-500 dark:text-slate-400">Últimos movimientos registrados en este ciclo.</p>
                 </div>
                 <div className="flex gap-2">
-                  <button className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-700 flex items-center transition-colors">
-                    <Filter className="w-4 h-4 mr-1" />
-                    Filtrar
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                      className={`px-3 py-2 text-sm font-medium rounded-lg border flex items-center transition-colors ${activeFilterCount > 0
+                        ? 'text-primary bg-red-50 dark:bg-red-900/20 border-primary dark:border-red-700'
+                        : 'text-gray-600 dark:text-slate-300 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 border-gray-200 dark:border-slate-700'
+                        }`}
+                    >
+                      <Filter className="w-4 h-4 mr-1" />
+                      Filtrar
+                      {activeFilterCount > 0 && (
+                        <span className="ml-1.5 w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center">{activeFilterCount}</span>
+                      )}
+                    </button>
+                    {showFilterDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setShowFilterDropdown(false)} />
+                        <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-surface-dark rounded-xl shadow-xl border border-gray-200 dark:border-border-dark z-40 p-4 space-y-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Estado</label>
+                            <select
+                              value={salesStatusFilter}
+                              onChange={(e) => setSalesStatusFilter(e.target.value)}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                            >
+                              <option value="ALL">Todos</option>
+                              <option value="PENDING">Pendiente</option>
+                              <option value="UNDER_REVIEW">En Revision</option>
+                              <option value="APPROVED">Aprobada</option>
+                              <option value="REJECTED">Rechazada</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-2">Ordenar por</label>
+                            <select
+                              value={salesSortBy}
+                              onChange={(e) => setSalesSortBy(e.target.value)}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                            >
+                              <option value="date_newest">Fecha: mas recientes</option>
+                              <option value="date_oldest">Fecha: mas antiguas</option>
+                              <option value="price_highest">Monto: mayor a menor</option>
+                              <option value="price_lowest">Monto: menor a mayor</option>
+                            </select>
+                          </div>
+                          {activeFilterCount > 0 && (
+                            <button
+                              onClick={() => { setSalesStatusFilter('ALL'); setSalesSortBy('date_newest'); }}
+                              className="w-full text-sm text-primary hover:text-primary-hover font-medium py-1.5 transition-colors"
+                            >
+                              Limpiar filtros
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <Link
                     to="/seller/ventas"
                     className="px-3 py-2 text-sm font-medium text-white bg-gray-800 dark:bg-slate-700 hover:bg-gray-900 dark:hover:bg-slate-600 rounded-lg flex items-center transition-colors shadow-lg shadow-gray-200 dark:shadow-none"
@@ -601,16 +683,30 @@ function SellerHome() {
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-mayorista-red mx-auto"></div>
                     <p className="mt-4 text-gray-500 dark:text-slate-400">Cargando ventas...</p>
                   </div>
-                ) : mySales.length === 0 ? (
+                ) : filteredSales.length === 0 ? (
                   <div className="text-center py-12">
                     <FileText className="w-12 h-12 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
-                    <p className="text-gray-500 dark:text-slate-400">No tienes ventas registradas aún.</p>
-                    <button
-                      onClick={() => setShowUploadModal(true)}
-                      className="mt-3 px-4 py-2 bg-mayorista-red text-white rounded-lg hover:bg-opacity-90 transition-colors"
-                    >
-                      Subir tu primera venta
-                    </button>
+                    {mySales.length === 0 ? (
+                      <>
+                        <p className="text-gray-500 dark:text-slate-400">No tienes ventas registradas aun.</p>
+                        <button
+                          onClick={() => setShowUploadModal(true)}
+                          className="mt-3 px-4 py-2 bg-mayorista-red text-white rounded-lg hover:bg-opacity-90 transition-colors"
+                        >
+                          Subir tu primera venta
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-gray-500 dark:text-slate-400">No hay ventas que coincidan con el filtro.</p>
+                        <button
+                          onClick={() => { setSalesStatusFilter('ALL'); setSalesDateSort('newest'); }}
+                          className="mt-3 px-4 py-2 text-primary hover:text-primary-hover font-medium transition-colors"
+                        >
+                          Limpiar filtros
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <table className="w-full">
@@ -640,7 +736,7 @@ function SellerHome() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-border-dark">
-                      {mySales.map((sale) => (
+                      {filteredSales.map((sale) => (
                         <tr
                           key={sale.id}
                           onClick={() => setSelectedSale(sale)}
@@ -732,7 +828,7 @@ function SellerHome() {
                 </div>
               )}
               <div className="px-6 py-4 border-t border-gray-100 dark:border-border-dark bg-gray-50 dark:bg-slate-800/50">
-                <p className="text-xs text-center text-gray-500 dark:text-slate-400">Mostrando las últimas {mySales.length} transacciones.</p>
+                <p className="text-xs text-center text-gray-500 dark:text-slate-400">Mostrando {filteredSales.length} de {mySales.length} transacciones.{activeFilterCount > 0 && ' (filtrado)'}</p>
               </div>
             </div>
           </div>

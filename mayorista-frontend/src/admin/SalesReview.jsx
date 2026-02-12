@@ -21,7 +21,6 @@ import {
     BarChart3,
     Settings,
     RefreshCw,
-    Bell,
     Moon,
     Sun,
     FileText,
@@ -32,6 +31,7 @@ import {
 import SaleDetailModal from '../components/SaleDetailModal';
 import { getSalesUnderReview, reviewSale } from '../api/admin.api';
 import AdminNotificationsPanel from './components/AdminNotificationsPanel';
+import NotificationBell from '../components/NotificationBell';
 import AdminFooter from './components/AdminFooter';
 import AdminSidebar from './components/AdminSidebar';
 
@@ -201,12 +201,7 @@ function SalesReview() {
                         <span className="font-medium text-slate-900 dark:text-white">Revisar Ventas</span>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button className="relative p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                            <Bell className="w-5 h-5" />
-                            {stats.pendingRequests > 0 && (
-                                <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-white dark:ring-surface-dark"></span>
-                            )}
-                        </button>
+                        <NotificationBell />
                         <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
                         <button
                             onClick={toggleDarkMode}

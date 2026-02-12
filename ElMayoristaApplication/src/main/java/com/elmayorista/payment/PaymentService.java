@@ -3,6 +3,7 @@ package com.elmayorista.payment;
 import com.elmayorista.dto.CreatePaymentRequest;
 import com.elmayorista.dto.Mapper;
 import com.elmayorista.dto.PaymentDTO;
+import com.elmayorista.notification.NotificationService;
 import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleRepository;
 import com.elmayorista.sale.SaleService;
@@ -26,6 +27,7 @@ public class PaymentService {
     private final SaleRepository saleRepository;
     private final SaleService saleService;
     private final FileStorageService fileStorageService;
+    private final NotificationService notificationService;
     private final Mapper mapper;
 
     @Transactional
@@ -79,6 +81,9 @@ public class PaymentService {
             sale.setCommissionAmount(commission);
             // NOTE: commissionSettled remains false until cycle close
 
+            // Clear pending sale notifications since sale is now under review
+            notificationService.clearNotificationsForSale(sale.getId());
+
         } else {
             sale.setPaymentStatus(PaymentStatus.PARTIALLY_PAID);
         }
@@ -86,5 +91,59 @@ public class PaymentService {
         saleRepository.save(sale);
 
         return mapper.toPaymentDTO(payment);
+    }
+
+    /**
+     * Elimina un pago solo si el vendedor es el dueño y el estado de la venta lo
+     * permite
+     */
+    @Transactional
+    public void deletePayment(Long paymentId, Long saleId, java.util.UUID sellerId) {
+        // Buscar el pago
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new EntityNotFoundException("Pago no encontrado con ID: " + paymentId));
+
+        // Verificar que el pago pertenece a la venta especificada
+        if (!payment.getSale().getId().equals(saleId)) {
+            throw new IllegalStateException("El pago no pertenece a esta venta");
+        }
+
+        Sale sale = payment.getSale();
+
+        // Verificar que el vendedor sea el dueño de la venta
+        if (!sale.getSeller().getId().equals(sellerId)) {
+            throw new IllegalStateException("No tienes permiso para eliminar este comprobante");
+        }
+
+        // Verificar que el estado permita modificación
+        if (!saleService.canModifySale(sale)) {
+            throw new IllegalStateException(
+                    "No puedes eliminar comprobantes de una venta que ya fue revisada o aprobada. Estado actual: "
+                            + sale.getStatus());
+        }
+
+        // Eliminar el archivo del comprobante si existe
+        // TODO: Implementar fileStorageService.deleteFile() cuando esté disponible
+        if (payment.getReceiptUrl() != null && !payment.getReceiptUrl().isEmpty()) {
+            // fileStorageService.deleteFile(payment.getReceiptUrl());
+            System.out.println(
+                    "Archivo de comprobante no eliminado (método no implementado): " + payment.getReceiptUrl());
+        }
+
+        // Eliminar el pago
+        paymentRepository.delete(payment);
+
+        // Recalcular el estado de pago de la venta
+        BigDecimal totalPaid = paymentRepository.sumAmountBySale(sale);
+
+        if (totalPaid.compareTo(BigDecimal.ZERO) == 0) {
+            sale.setPaymentStatus(PaymentStatus.UNPAID);
+        } else if (totalPaid.compareTo(sale.getTotal()) < 0) {
+            sale.setPaymentStatus(PaymentStatus.PARTIALLY_PAID);
+        } else {
+            sale.setPaymentStatus(PaymentStatus.PAID);
+        }
+
+        saleRepository.save(sale);
     }
 }

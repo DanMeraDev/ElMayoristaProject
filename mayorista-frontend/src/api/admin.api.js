@@ -28,10 +28,8 @@ export const rejectSeller = (sellerId, reason) => axios.post(`/admin/sellers/${s
 export const updateSellerCommission = (sellerId, commissionPercentage) =>
   axios.put(`/admin/sellers/${sellerId}/commission?commissionPercentage=${commissionPercentage}`);
 
-// ========== User Management ==========
-
 // Get all users (filter by role in frontend)
-export const getAllUsers = (page = 0, size = 10) =>
+export const getAllUsers = (page = 0, size = 1000) =>
   axios.get(`/users?page=${page}&size=${size}`);
 
 // Get user by ID
@@ -43,6 +41,10 @@ export const getUserCommission = (userId) => axios.get(`/users/${userId}/commiss
 // Get user's sales
 export const getUserSales = (userId, page = 0, size = 10) =>
   axios.get(`/users/${userId}/sales?page=${page}&size=${size}`);
+
+// Update seller permissions
+export const updateSellerPermissions = (userId, permissions) =>
+  axios.put(`/users/${userId}/permissions`, permissions);
 
 // ========== Sales Management ==========
 
@@ -77,3 +79,17 @@ export const getCurrentCycleStats = () => axios.get('/reports/current-cycle');
 
 // Get a specific cycle by ID
 export const getCycleById = (cycleId) => axios.get(`/reports/cycles/${cycleId}`);
+
+// ========== Fiados Management (Admin) ==========
+
+// Get all fiados from all sellers
+export const getAllFiados = () => axios.get('/fiados/admin/all');
+
+// Delete a fiado (admin)
+export const adminDeleteFiado = (fiadoId) => axios.delete(`/fiados/admin/${fiadoId}`);
+
+// Get all customer fiados
+export const getAllCustomerFiados = () => axios.get('/customer-fiados/admin/all');
+
+// Delete a customer fiado (admin)
+export const adminDeleteCustomerFiado = (fiadoId) => axios.delete(`/customer-fiados/admin/${fiadoId}`);

@@ -131,10 +131,17 @@ function AdminSidebar({ isOpen, onClose, pendingRequestsCount = 0 }) {
 
                     <div className="pt-4 mt-4 border-t border-slate-600">
                         <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Administración</p>
-                        <a href="#" className="flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-white hover:bg-sidebar-hover rounded-lg transition-all group">
-                            <Settings className="w-5 h-5 group-hover:text-primary transition-colors" />
+                        <Link
+                            to="/admin/settings"
+                            onClick={handleLinkClick}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${isActive('/admin/settings')
+                                ? 'text-slate-100 bg-sidebar-hover'
+                                : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
+                                }`}
+                        >
+                            <Settings className={`w-5 h-5 transition-colors ${isActive('/admin/settings') ? 'text-primary' : 'group-hover:text-primary'}`} />
                             <span className="text-sm font-medium">Configuración</span>
-                        </a>
+                        </Link>
                     </div>
                 </nav>
 

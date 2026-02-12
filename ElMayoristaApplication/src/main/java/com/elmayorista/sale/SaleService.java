@@ -1,5 +1,6 @@
 package com.elmayorista.sale;
 
+import com.elmayorista.notification.NotificationService;
 import com.elmayorista.service.FileStorageService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserService;
@@ -22,9 +23,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SaleService {
 
-    // Trigger recompile
     private final SaleRepository saleRepository;
     private final UserService userService;
+    private final NotificationService notificationService;
 
     public BigDecimal calculateCommission(BigDecimal total, BigDecimal percentage) {
         if (percentage == null) {
@@ -93,7 +94,12 @@ public class SaleService {
             sale.setCommissionSettled(false);
         }
 
-        return saleRepository.save(sale);
+        Sale saved = saleRepository.save(sale);
+
+        // Clear any pending sale reminder notifications
+        notificationService.clearNotificationsForSale(sale.getId());
+
+        return saved;
     }
 
     @Transactional
@@ -209,9 +215,32 @@ public class SaleService {
         return saleRepository.save(existingSale);
     }
 
+    /**
+     * Verifica si una venta puede ser modificada o eliminada
+     * Solo se permite si está en estado PENDING o REJECTED
+     */
+    public boolean canModifySale(Sale sale) {
+        return sale.getStatus() == SaleStatus.PENDING || sale.getStatus() == SaleStatus.REJECTED;
+    }
+
+    /**
+     * Elimina una venta solo si el vendedor es el dueño y el estado lo permite
+     */
     @Transactional
-    public void deleteSale(Long id) {
-        getSaleById(id);
+    public void deleteSale(Long id, UUID sellerId) {
+        Sale sale = getSaleById(id);
+
+        // Verificar que el vendedor sea el dueño de la venta
+        if (!sale.getSeller().getId().equals(sellerId)) {
+            throw new IllegalStateException("No tienes permiso para eliminar esta venta");
+        }
+
+        // Verificar que el estado permita eliminación
+        if (!canModifySale(sale)) {
+            throw new IllegalStateException(
+                    "No puedes eliminar una venta que ya fue revisada o aprobada. Estado actual: " + sale.getStatus());
+        }
+
         saleRepository.deleteById(id);
     }
 }

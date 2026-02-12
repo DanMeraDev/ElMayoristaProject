@@ -9,9 +9,12 @@ import SellerDetails from '../admin/SellerDetails';
 import SalesReview from '../admin/SalesReview';
 import AdminSalesHistory from '../admin/AdminSalesHistory';
 import AdminReports from '../admin/AdminReports';
+import AdminSettings from '../admin/AdminSettings';
 import SellerHome from '../seller/SellerHome';
 import SellerSales from '../seller/SellerSales';
 import SellerSupport from '../seller/pages/SellerSupport';
+import SellerMisFiados from '../seller/SellerMisFiados';
+import SellerFiarUsuarios from '../seller/SellerFiarUsuarios';
 import PendingApproval from '../seller/PendingApproval';
 
 // Componente para proteger rutas
@@ -81,6 +84,7 @@ export const AppRouter = () => {
                         <Route path="sales-review" element={<SalesReview />} />
                         <Route path="sales-history" element={<AdminSalesHistory />} />
                         <Route path="reports" element={<AdminReports />} />
+                        <Route path="settings" element={<AdminSettings />} />
                     </Routes>
                 </ProtectedRoute>
             } />
@@ -92,6 +96,8 @@ export const AppRouter = () => {
                         <Route path="home" element={<SellerHome />} />
                         <Route path="ventas" element={<SellerSales />} />
                         <Route path="soporte" element={<SellerSupport />} />
+                        <Route path="mis-fiados" element={<SellerMisFiados />} />
+                        <Route path="fiar-usuarios" element={<SellerFiarUsuarios />} />
                     </Routes>
                 </ProtectedRoute>
             } />

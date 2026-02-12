@@ -9,7 +9,6 @@ import {
   CheckCircle,
   Settings,
   LogOut,
-  Bell,
   Moon,
   Sun,
   DollarSign,
@@ -32,6 +31,7 @@ import {
 import { getAllSellers, approveSeller, rejectSeller, getPendingSellers, getSalesUnderReview } from '../api/admin.api';
 import AdminFooter from './components/AdminFooter';
 import AdminSidebar from './components/AdminSidebar';
+import NotificationBell from '../components/NotificationBell';
 
 function Dashboard() {
   const { user, logout } = useAuth();
@@ -303,78 +303,7 @@ function Dashboard() {
             <span className="font-medium text-slate-900 dark:text-white">Dashboard Admin</span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              >
-                <Bell className="w-5 h-5" />
-                {stats.pendingRequests > 0 && (
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-white dark:ring-surface-dark"></span>
-                )}
-              </button>
-
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-surface-dark rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-hidden flex flex-col">
-                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Notificaciones</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {stats.pendingRequests} ventas pendientes de revisión
-                    </p>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto">
-                    {pendingSales.length > 0 ? (
-                      <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {pendingSales.map((sale) => (
-                          <Link
-                            key={sale.id}
-                            to="/admin/sales-review"
-                            onClick={() => setShowNotifications(false)}
-                            className="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-                                <CheckCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                  Revisar venta de {sale.seller?.fullName || 'Vendedor'}
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                  {sale.customerName} - ${sale.total?.toLocaleString('es-EC', { minimumFractionDigits: 2 })}
-                                </p>
-                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                  {new Date(sale.orderDate).toLocaleDateString('es-EC')}
-                                </p>
-                              </div>
-                            </div>
-                          </Link>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                        <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No hay notificaciones</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {pendingSales.length > 0 && (
-                    <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                      <Link
-                        to="/admin/sales-review"
-                        onClick={() => setShowNotifications(false)}
-                        className="block text-center text-sm text-primary hover:text-primary/80 font-medium"
-                      >
-                        Ver todas las ventas
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <NotificationBell />
             <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
             <button
               onClick={toggleDarkMode}

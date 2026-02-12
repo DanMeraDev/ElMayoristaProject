@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     ChevronRight,
-    Bell,
     Moon,
     Sun,
     FileSpreadsheet,
@@ -23,6 +22,7 @@ import { useDarkMode } from '../context/DarkModeContext';
 import { getCycles, getCurrentCycleStats, closeCycle, getSalesUnderReview } from '../api/admin.api';
 import AdminFooter from './components/AdminFooter';
 import AdminSidebar from './components/AdminSidebar';
+import NotificationBell from '../components/NotificationBell';
 
 function AdminReports() {
     const { user } = useAuth();
@@ -176,6 +176,7 @@ function AdminReports() {
                         >
                             <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
                         </button>
+                        <NotificationBell />
                         <button
                             onClick={toggleDarkMode}
                             className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"

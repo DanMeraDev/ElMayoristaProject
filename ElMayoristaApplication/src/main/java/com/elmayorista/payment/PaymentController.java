@@ -31,7 +31,7 @@ public class PaymentController {
             @RequestParam(value = "notes", required = false) String notes,
             @RequestParam(value = "file", required = false) MultipartFile file,
             @AuthenticationPrincipal UserDetails userDetails) {
-        
+
         User currentUser = userService.getUserByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
@@ -43,5 +43,22 @@ public class PaymentController {
 
         PaymentDTO newPayment = paymentService.addPayment(request, file, currentUser);
         return new ResponseEntity<>(newPayment, HttpStatus.CREATED);
+    }
+
+    /**
+     * Elimina un pago (solo si el vendedor es el dueño y el estado de la venta lo
+     * permite)
+     */
+    @DeleteMapping("/{saleId}/payments/{paymentId}")
+    public ResponseEntity<Void> deletePayment(
+            @PathVariable Long saleId,
+            @PathVariable Long paymentId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        User currentUser = userService.getUserByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        paymentService.deletePayment(paymentId, saleId, currentUser.getId());
+        return ResponseEntity.noContent().build();
     }
 }

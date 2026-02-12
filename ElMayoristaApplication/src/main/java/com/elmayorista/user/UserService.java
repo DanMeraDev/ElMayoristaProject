@@ -379,6 +379,33 @@ public class UserService implements UserDetailsService {
         return userRepository.save(existingUser);
     }
 
+    /**
+     * Actualiza los permisos de crédito de un vendedor
+     * 
+     * @param userId  ID del vendedor
+     * @param request DTO con los permisos a actualizar
+     * @return Usuario actualizado
+     */
+    @Transactional
+    public User updateSellerPermissions(UUID userId, UpdatePermissionsRequest request) {
+        User user = getUserById(userId);
+
+        // Verificar que sea un seller
+        if (!user.getRoles().contains(Role.SELLER)) {
+            throw new IllegalStateException("El usuario no es un vendedor");
+        }
+
+        // Actualizar permisos si se proporcionan
+        if (request.getCanCreditSelf() != null) {
+            user.setCanCreditSelf(request.getCanCreditSelf());
+        }
+        if (request.getCanCreditCustomers() != null) {
+            user.setCanCreditCustomers(request.getCanCreditCustomers());
+        }
+
+        return userRepository.save(user);
+    }
+
     @Transactional
     public void deleteUser(UUID id) {
         // Verificar que el usuario existe
