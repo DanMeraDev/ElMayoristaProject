@@ -31,7 +31,7 @@ public class PaymentController {
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.getUserByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Usuario no encontrado"));
 
         CreatePaymentRequest request = new CreatePaymentRequest();
         request.setSaleId(saleId);
@@ -54,7 +54,7 @@ public class PaymentController {
             @AuthenticationPrincipal UserDetails userDetails) {
 
         User currentUser = userService.getUserByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Usuario no encontrado"));
 
         paymentService.deletePayment(paymentId, saleId, currentUser.getId());
         return ResponseEntity.noContent().build();

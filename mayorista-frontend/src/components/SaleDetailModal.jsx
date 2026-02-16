@@ -1,6 +1,22 @@
+import { useEffect, useCallback } from 'react';
 import { X, DollarSign, FileText, CheckCircle, Upload, Image as ImageIcon, Tv } from 'lucide-react';
 
 function SaleDetailModal({ sale, onClose, children, userCommission }) {
+    // Cerrar con Escape
+    const handleKeyDown = useCallback((e) => {
+        if (e.key === 'Escape') onClose();
+    }, [onClose]);
+
+    useEffect(() => {
+        document.addEventListener('keydown', handleKeyDown);
+        // Prevenir scroll del body cuando el modal está abierto
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = '';
+        };
+    }, [handleKeyDown]);
+
     if (!sale) return null;
 
     const formatDate = (dateString) => {
@@ -50,10 +66,19 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
     const commissionPercent = sale.commissionPercentage || userCommission || 5;
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white dark:bg-surface-dark rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+            role="presentation"
+        >
+            <div
+                className="bg-white dark:bg-surface-dark rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="sale-detail-title"
+            >
                 <div className="sticky top-0 bg-white dark:bg-surface-dark px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between z-10">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <h3 id="sale-detail-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         {sale.saleType === 'TV' && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-md">
                                 <Tv className="w-3.5 h-3.5" /> TV
@@ -63,7 +88,8 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                     </h3>
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500 dark:text-gray-400 Transition-colors"
+                        aria-label="Cerrar detalle de venta"
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-500 dark:text-gray-400 transition-colors"
                     >
                         <X className="w-5 h-5" />
                     </button>

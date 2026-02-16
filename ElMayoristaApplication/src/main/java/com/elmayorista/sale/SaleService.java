@@ -1,11 +1,14 @@
 package com.elmayorista.sale;
 
+import com.elmayorista.config.CacheConfig;
 import com.elmayorista.notification.NotificationService;
 import com.elmayorista.service.FileStorageService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,10 @@ public class SaleService {
                 .setScale(2, RoundingMode.HALF_UP);
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.DASHBOARD_STATS_CACHE, allEntries = true),
+            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, allEntries = true)
+    })
     @Transactional
     public Sale createSale(Sale sale) {
         if (sale.getOrderDate() == null) {
@@ -134,6 +141,10 @@ public class SaleService {
         return saved;
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.DASHBOARD_STATS_CACHE, allEntries = true),
+            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, allEntries = true)
+    })
     @Transactional
     public Sale updateSaleStatus(Long id, SaleStatus newStatus) {
         Sale sale = saleRepository.findById(id)
@@ -157,6 +168,11 @@ public class SaleService {
 
     @Transactional
     public Sale recalculateCommission(Long id, BigDecimal newPercentage) {
+        if (newPercentage == null || newPercentage.compareTo(BigDecimal.ZERO) < 0
+                || newPercentage.compareTo(new BigDecimal("100")) > 0) {
+            throw new IllegalArgumentException("El porcentaje de comisión debe estar entre 0 y 100");
+        }
+
         Sale sale = saleRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Venta no encontrada con ID: " + id));
 

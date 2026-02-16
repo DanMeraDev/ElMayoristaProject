@@ -14,18 +14,19 @@ Centraliza todas las llamadas al backend. Usa una instancia configurada de Axios
 
 | Archivo | Descripcion |
 |---|---|
-| `axios.js` | Instancia base de Axios con interceptors de request (JWT) y response (401/403) |
-| `auth.api.js` | Login, registro, recuperacion de contraseña, perfil actual |
+| `axios.js` | Instancia base de Axios con `withCredentials: true` (cookies HttpOnly) e interceptor de response |
+| `auth.api.js` | Login, logout, registro, recuperacion de contraseña, perfil actual |
 | `admin.api.js` | Gestion de sellers, ventas, revision, ciclos, comisiones, reportes |
 | `reports.api.js` | Upload de PDF, ventas del seller, pagos, comisiones, detalle de venta |
+| `notification.api.js` | Notificaciones: listar, contar no leidas, marcar como leidas |
 | `support.api.js` | CRUD de tickets de soporte |
 
-#### Interceptor de Request
-Agrega automaticamente el header `Authorization: Bearer <token>` a cada request si hay un token en `localStorage`.
+#### Autenticacion via Cookies
+La instancia de Axios se configura con `withCredentials: true`, lo que hace que el browser envie automaticamente la cookie `jwt` HttpOnly en cada request. **No se usa header Authorization ni localStorage para el token.**
 
 #### Interceptor de Response
 Captura errores 401 (token expirado) y 403 (cuenta deshabilitada):
-- Limpia `localStorage` (token y user)
+- Excluye `/users/me` y `/auth/` del redirect (manejados por AuthContext)
 - Redirige a `/login` con un mensaje informativo
 - Evita bucles de redireccion si ya esta en una pagina de auth
 
@@ -44,9 +45,9 @@ Provee estado de autenticacion a toda la aplicacion:
 
 - **Estado**: `user`, `isAuthenticated`, `isLoading`, `errors`
 - **Acciones**: `signin`, `signup`, `logout`, `refreshUser`
-- **Inicializacion**: Al montar, verifica el token almacenado contra el backend (`GET /users/me`)
-- **Persistencia**: Token y datos de usuario en `localStorage`
-- **Multi-tab**: Escucha eventos `storage` para sincronizar logout entre pestañas
+- **Inicializacion**: Al montar, verifica la sesion contra el backend (`GET /users/me`) usando la cookie HttpOnly
+- **Persistencia**: No usa `localStorage` para token ni datos de usuario. La cookie HttpOnly es gestionada automaticamente por el browser
+- **Logout**: Llama al backend (`POST /api/auth/logout`) para borrar la cookie
 
 ```jsx
 // Uso en componentes
@@ -95,6 +96,8 @@ Define todas las rutas de la aplicacion con proteccion basada en roles.
 |---|---|---|
 | `/seller/home` | `SellerHome` | Dashboard del vendedor |
 | `/seller/ventas` | `SellerSales` | Mis ventas |
+| `/seller/fiar-usuarios` | `SellerFiarUsuarios` | Fiar a clientes registrados |
+| `/seller/mis-fiados` | `SellerMisFiados` | Mis fiados personales |
 | `/seller/soporte` | `SellerSupport` | Tickets de soporte |
 
 #### Componente `ProtectedRoute`
@@ -109,9 +112,11 @@ Wrapper que protege rutas verificando:
 | Archivo | Descripcion |
 |---|---|
 | `SaleDetailModal.jsx` | Modal reutilizable para ver detalle de una venta (usado por admin y seller) |
+| `NotificationBell.jsx` | Campana de notificaciones con badge de no leidas (admin y seller) |
 
 ### `admin/` - Modulo de Administracion
 
+**Paginas (`admin/pages/`):**
 | Archivo | Descripcion |
 |---|---|
 | `Dashboard.jsx` | Dashboard con estadisticas: ventas totales, sellers activos, comisiones, ventas pendientes |
@@ -120,6 +125,7 @@ Wrapper que protege rutas verificando:
 | `SalesReview.jsx` | Cola de ventas en estado UNDER_REVIEW para aprobar/rechazar |
 | `AdminSalesHistory.jsx` | Historial completo de todas las ventas con filtros |
 | `AdminReports.jsx` | Gestion de ciclos: estadisticas del ciclo actual, cierre, historial |
+| `AdminSettings.jsx` | Configuraciones del administrador |
 | `PendingSellers.jsx` | Lista de sellers pendientes de aprobacion |
 
 **Subcomponentes (`admin/components/`):**
@@ -131,11 +137,15 @@ Wrapper que protege rutas verificando:
 
 ### `seller/` - Modulo de Vendedor
 
+**Paginas (`seller/pages/`):**
 | Archivo | Descripcion |
 |---|---|
 | `SellerHome.jsx` | Dashboard del seller: comisiones, ventas recientes, estadisticas |
 | `SellerSales.jsx` | Lista de ventas del seller con acciones de pago y upload |
+| `SellerFiarUsuarios.jsx` | Registrar fiados a clientes aprobados |
+| `SellerMisFiados.jsx` | Lista de fiados personales del seller |
 | `PendingApproval.jsx` | Pantalla mostrada a sellers que aun no han sido aprobados |
+| `SellerSupport.jsx` | Pagina de soporte: crear tickets, ver historial |
 
 **Subcomponentes (`seller/components/`):**
 | Archivo | Descripcion |
@@ -143,18 +153,8 @@ Wrapper que protege rutas verificando:
 | `SellerSidebar.jsx` | Menu lateral de navegacion del seller |
 | `SellerFooter.jsx` | Footer del layout seller |
 | `SalesUploadModal.jsx` | Modal para subir ventas (manual o PDF) |
+| `TvSaleModal.jsx` | Modal para crear ventas de tipo TV (serial, modelo) |
 | `PendingSalesPanel.jsx` | Panel con ventas en estado PENDING |
-
-**Paginas (`seller/pages/`):**
-| Archivo | Descripcion |
-|---|---|
-| `SellerSupport.jsx` | Pagina de soporte: crear tickets, ver historial |
-
-### `utils/` - Utilidades
-
-| Archivo | Descripcion |
-|---|---|
-| `auth.js` | Funciones auxiliares de autenticacion |
 
 ---
 
@@ -201,15 +201,19 @@ El proxy de desarrollo redirige todas las llamadas `/api/*` al backend en `local
 1. Usuario ingresa credenciales en AuthPage
 2. AuthContext.signin() llama a POST /api/auth/login
 3. Respuesta exitosa:
-   → Token JWT se guarda en localStorage
-   → Datos del usuario se guardan en localStorage
+   → Backend setea cookie HttpOnly con el JWT
+   → AuthContext guarda datos del usuario en estado React
    → Estado isAuthenticated = true
 4. AppRouter redirige segun rol:
    → ADMIN → /admin/dashboard
    → SELLER → /seller/home (o /pending-approval si pendiente)
 5. Cada request subsecuente:
-   → Axios interceptor agrega header Authorization
+   → Browser envia la cookie automaticamente (withCredentials: true)
 6. Si token expira (401):
-   → Interceptor limpia localStorage
-   → Redirige a /login con mensaje "Sesion expirada"
+   → Interceptor redirige a /login con mensaje "Sesion expirada"
+   → Excluye /users/me y /auth/ del redirect (manejados por AuthContext)
+7. Logout:
+   → AuthContext llama a POST /api/auth/logout
+   → Backend borra la cookie (MaxAge=0)
+   → Estado isAuthenticated = false
 ```

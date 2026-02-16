@@ -23,8 +23,8 @@ import java.util.stream.Collectors;
 @Component
 public class JwtUtil {
 
-    // Clave secreta para firmar el token (idealmente debe estar en un archivo de propiedades)
-    @Value("${jwt.secret:8nQVnF7PLRdKLo3aYHlUI2NpjxceKPNSuYOcNKMfT48=}")
+    // Clave secreta para firmar el token (REQUERIDA via variable de entorno JWT_SECRET)
+    @Value("${jwt.secret}")
     private String secretKey;
 
     // Tiempo de expiración del token (24 horas)

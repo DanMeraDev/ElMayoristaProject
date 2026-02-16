@@ -15,18 +15,20 @@ Cada modulo de dominio (`sale`, `payment`, `user`, `report`, `support`) contiene
 ## Descripcion de Paquetes
 
 ### `auth` - Autenticacion
-Maneja el flujo completo de autenticacion: login, registro, recuperacion de contraseña y validacion JWT.
+Maneja el flujo completo de autenticacion: login, registro, logout, recuperacion de contraseña y validacion JWT via HttpOnly cookies.
 
 | Clase | Descripcion |
 |---|---|
-| `AuthController` | Endpoints publicos: login, registro, forgot/reset password |
+| `AuthController` | Endpoints publicos: login (setea cookie HttpOnly), register, logout (borra cookie), forgot/reset password |
 | `AuthService` | Logica de autenticacion, encriptacion de passwords, generacion de tokens |
-| `JwtFilter` | Filtro HTTP que intercepta cada request para validar el token JWT |
+| `JwtFilter` | Filtro HTTP que intercepta cada request y extrae el JWT de la cookie `jwt` |
 | `JwtUtil` | Utilidades para generar, validar y extraer claims de tokens JWT |
 | `JwtUser` | Interfaz que permite extraer roles del usuario para incluirlos en el token |
 | `LoginRequest` | DTO con email y password |
 | `RegisterRequest` | DTO con datos de registro (email, password, fullName, phoneNumber) |
-| `AuthResponse` | DTO de respuesta con token JWT y datos del usuario |
+| `AuthResponse` | DTO de respuesta con datos del usuario (token NO se envia en body, solo en cookie) |
+| `ForgotPasswordRequest` | DTO con email para recuperacion de contraseña |
+| `ResetPasswordRequest` | DTO con token y nueva contraseña |
 
 ### `admin` - Administracion
 Endpoints exclusivos para usuarios con rol ADMIN.
@@ -42,26 +44,32 @@ Configuracion transversal de la aplicacion.
 | Clase | Descripcion |
 |---|---|
 | `SecurityConfig` | Cadena de filtros de seguridad, reglas de autorizacion por ruta |
-| `AppConfig` | Configuracion general (CORS, beans) |
-| `SwaggerConfig` | Configuracion de SpringDoc OpenAPI para Swagger UI |
+| `AppConfig` | Configuracion general (beans, recursos estaticos) |
+| `DataInitializer` | Inicializacion de datos al arrancar (admin por defecto) |
+| `Mapper` | Componente central de conversion Entity ↔ DTO |
+| `ErrorResponse` | Respuesta de error estandarizada (timestamp, status, message, path) |
 | `GlobalExceptionHandler` | Manejo centralizado de excepciones (`@RestControllerAdvice`) |
 | `CustomAccessDeniedHandler` | Manejo personalizado de errores 403 |
 
-### `dto` - Data Transfer Objects
-Objetos para transferencia de datos entre capas y hacia el cliente.
+> **Nota:** Los DTOs se encuentran en sus respectivos paquetes de dominio (no en un paquete `dto/` centralizado).
+
+### `notification` - Notificaciones
+Sistema de notificaciones en plataforma y por email para sellers y admins.
 
 | Clase | Descripcion |
 |---|---|
-| `Mapper` | Componente central de conversion Entity ↔ DTO |
-| `SaleDTO` | Representacion completa de venta (incluye pagos, productos, totales calculados) |
-| `SaleCreateDTO` | Datos para crear una venta manualmente |
-| `PaymentDTO` | Representacion de un pago |
-| `CreatePaymentRequest` | Datos para registrar un pago |
-| `UserDTO` | Representacion de usuario (sin password) |
-| `CycleDTO` | Representacion de ciclo de facturacion |
-| `TicketDTO` | Representacion de ticket de soporte |
-| `ErrorResponse` | Respuesta de error estandarizada (timestamp, status, message, path) |
-| `ClientData`, `OrderData`, `ProductData`, `ReportData` | DTOs para la extraccion de datos desde PDF |
+| `Notification` | Entidad JPA: tipo, titulo, mensaje, referencia a venta, estado de lectura |
+| `NotificationController` | Endpoints: listar, contar no leidas, marcar como leidas, trigger manual |
+| `NotificationService` | Logica: recordatorios de ventas pendientes, alertas admin, notificaciones de revision |
+| `NotificationRepository` | Repositorio JPA para notificaciones |
+| `NotificationScheduler` | Job programado (diario 8:00 AM + al iniciar) para generar recordatorios |
+| `NotificationType` | Enum: `SALE_PENDING_REMINDER`, `SALE_PENDING_ADMIN_ALERT`, `SALE_UNDER_REVIEW` |
+| `NotificationDTO` | DTO de notificacion |
+
+**Tipos de notificacion:**
+- `SALE_PENDING_REMINDER` - Recordatorio al seller de ventas pendientes de pago (24h+)
+- `SALE_PENDING_ADMIN_ALERT` - Alerta al admin de ventas sin pagar por 30+ dias
+- `SALE_UNDER_REVIEW` - Notifica a admins cuando una venta pasa a revision
 
 ### `payment` - Pagos
 Gestion de pagos asociados a ventas.
@@ -70,10 +78,12 @@ Gestion de pagos asociados a ventas.
 |---|---|
 | `Payment` | Entidad JPA: monto, metodo, comprobante, fecha |
 | `PaymentController` | Endpoint POST para registrar pago con comprobante (multipart) |
-| `PaymentService` | Logica de pagos: validacion, subida de comprobante a R2, actualizacion de estado |
+| `PaymentService` | Logica de pagos: validacion, subida a R2, transicion a UNDER_REVIEW y notificacion a admins |
 | `PaymentRepository` | Repositorio JPA con query custom `sumAmountBySale` |
 | `PaymentMethod` | Enum: CASH, BANK_TRANSFER, CREDIT_CARD, DEBIT_CARD, OTHER |
 | `PaymentStatus` | Enum: UNPAID, PARTIALLY_PAID, PAID, REFUNDED |
+| `PaymentDTO` | DTO de pago |
+| `CreatePaymentRequest` | DTO para crear pago |
 
 ### `report` - Reportes y Ciclos
 Gestion de ciclos de facturacion y generacion de reportes.
@@ -91,13 +101,17 @@ Nucleo del sistema: gestion de ventas y sus detalles.
 
 | Clase | Descripcion |
 |---|---|
-| `Sale` | Entidad JPA principal: cliente, montos, estado, relacion con detalles y pagos |
+| `Sale` | Entidad JPA principal: cliente, montos, estado, tipo (STANDARD/TV), relacion con detalles y pagos |
 | `SaleDetail` | Entidad JPA: linea de producto (SKU, nombre, cantidad, precio, subtotal) |
-| `SaleController` | Creacion de ventas (manual y por PDF), consulta por ID |
+| `SaleController` | Creacion de ventas (manual, PDF y TV), consulta por ID, eliminacion |
 | `SaleService` | Logica de ventas: creacion, revision, calculo de comisiones |
 | `SaleRepository` | Repositorio JPA con queries por estado y vendedor |
 | `SaleDetailRepository` | Repositorio JPA para detalles de venta |
 | `SaleStatus` | Enum: PENDING, UNDER_REVIEW, APPROVED, REJECTED |
+| `SaleType` | Enum: STANDARD, TV |
+| `SaleDTO`, `SaleCreateDTO`, `SaleDetailDTO`, `SaleResponseDTO`, `SaleReportDTO` | DTOs de venta |
+| `ProductDTO` | DTO de producto |
+| `TvSaleCreateDTO` | DTO para crear venta de TV (serial, modelo) |
 
 ### `service` - Servicios Utilitarios
 Servicios transversales compartidos por multiples modulos.
@@ -107,8 +121,8 @@ Servicios transversales compartidos por multiples modulos.
 | `EmailService` | Envio de correos HTML via Gmail SMTP (aprobacion, rechazo, reset password, tickets) |
 | `ExcelReportService` | Generacion de reportes Excel con Apache POI |
 | `FileStorageService` | Subida de archivos a Cloudflare R2 via AWS S3 SDK |
-| `PdfExtractionService` | Extraccion inteligente de datos de PDFs (Odoo) usando OpenAI API |
-| `PdfParsingService` | Parsing basico de PDFs con Apache PDFBox |
+| `PdfExtractionService` | Extraccion de datos de PDFs (Odoo) con PDFBox + regex |
+| `PdfParsingService` | Parsing de PDFs con Apache PDFBox (productos, totales, clientes) |
 
 ### `support` - Soporte
 Sistema de tickets de soporte entre sellers y admin.
@@ -140,23 +154,28 @@ Gestion de usuarios y sus perfiles.
 
 ## Configuracion de Seguridad
 
-### Flujo de Autenticacion JWT
+### Flujo de Autenticacion JWT (HttpOnly Cookies)
 
 ```
 1. Login POST /api/auth/login
    → AuthService valida credenciales con BCrypt
    → JwtUtil genera token con email como subject y roles como claims
-   → Retorna token + datos del usuario
+   → Token se setea como cookie HttpOnly (NO se envia en el body)
+   → Retorna datos del usuario (sin token)
 
 2. Request autenticado
+   → Browser envia cookie automaticamente
    → JwtFilter intercepta la request
-   → Extrae token del header "Authorization: Bearer <token>"
+   → Extrae token de la cookie "jwt"
    → Valida token (firma, expiracion)
    → Carga UserDetails del usuario
    → Verifica que la cuenta este habilitada
    → Establece autenticacion en SecurityContext
 
-3. Autorizacion por ruta (SecurityConfig)
+3. Logout POST /api/auth/logout
+   → Borra la cookie "jwt" (MaxAge=0)
+
+4. Autorizacion por ruta (SecurityConfig)
    → /api/auth/**        → Publico (permitAll)
    → /swagger-ui/**      → Publico (permitAll)
    → /api/admin/**       → Solo ADMIN
@@ -164,6 +183,12 @@ Gestion de usuarios y sus perfiles.
    → /api/support/**     → Cualquier usuario autenticado
    → Todo lo demas       → Autenticado
 ```
+
+### Seguridad de la Cookie JWT
+- **HttpOnly**: JavaScript no puede acceder al token (proteccion contra XSS)
+- **Secure**: Solo se envia por HTTPS (configurable via `app.cookie.secure`)
+- **Path**: `/` (se envia en todas las rutas)
+- **MaxAge**: Igual a la expiracion del JWT (24 horas por defecto)
 
 ### Configuracion del Token
 - **Algoritmo**: HMAC-SHA256
@@ -212,7 +237,7 @@ spring.datasource.username=${DB_USERNAME}
 spring.datasource.password=${DB_PASSWORD}
 
 # JPA / Hibernate
-spring.jpa.hibernate.ddl-auto=create-drop    # CAMBIAR en produccion
+spring.jpa.hibernate.ddl-auto=update         # Solo aplica cambios incrementales
 spring.jpa.show-sql=true
 
 # Email (Gmail SMTP)
@@ -220,9 +245,6 @@ spring.mail.host=smtp.gmail.com
 spring.mail.port=587
 spring.mail.username=${MAIL_USERNAME}
 spring.mail.password=${MAIL_PASSWORD}
-
-# OpenAI
-spring.ai.openai.api-key=${OPENAI_API_KEY}
 
 # Cloudflare R2
 spring.cloud.aws.s3.endpoint=${R2_ENDPOINT}
@@ -238,6 +260,7 @@ app.r2.public-url=${R2_PUBLIC_URL}
 # Upload de archivos
 spring.servlet.multipart.max-file-size=10MB
 spring.servlet.multipart.max-request-size=10MB
-```
 
-> **Nota importante**: `ddl-auto=create-drop` recrea la base de datos cada vez que se reinicia la aplicacion. Para produccion, cambiar a `update` o `validate`. Ver [deployment.md](./deployment.md) para mas detalles.
+# Cookie de autenticacion
+app.cookie.secure=false    # Cambiar a true en produccion (HTTPS)
+```

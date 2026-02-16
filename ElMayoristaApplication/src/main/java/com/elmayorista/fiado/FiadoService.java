@@ -2,6 +2,7 @@ package com.elmayorista.fiado;
 
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,7 @@ public class FiadoService {
     @Transactional
     public FiadoDTO createFiado(UUID sellerId, String itemName, BigDecimal price) {
         User seller = userRepository.findById(sellerId)
-                .orElseThrow(() -> new RuntimeException("Seller not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Vendedor no encontrado"));
 
         Fiado fiado = Fiado.builder()
                 .seller(seller)
@@ -62,14 +63,14 @@ public class FiadoService {
     @Transactional
     public void deleteFiado(Long id, UUID sellerId) {
         Fiado fiado = fiadoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Fiado not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Fiado no encontrado"));
 
         if (!fiado.getSeller().getId().equals(sellerId)) {
-            throw new RuntimeException("No tienes permiso para eliminar este fiado");
+            throw new IllegalStateException("No tienes permiso para eliminar este fiado");
         }
 
         if (fiado.getStatus() != FiadoStatus.PENDING) {
-            throw new RuntimeException("Solo se pueden eliminar fiados pendientes");
+            throw new IllegalStateException("Solo se pueden eliminar fiados pendientes");
         }
 
         fiadoRepository.delete(fiado);
@@ -86,7 +87,7 @@ public class FiadoService {
     @Transactional
     public void adminDeleteFiado(Long id) {
         Fiado fiado = fiadoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Fiado no encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Fiado no encontrado"));
 
         fiadoRepository.delete(fiado);
         log.info("Fiado {} deleted by admin", id);

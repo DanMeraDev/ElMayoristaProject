@@ -46,10 +46,10 @@ public class NotificationService {
     @Transactional
     public void markAsRead(Long notificationId, UUID userId) {
         Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new RuntimeException("Notificacion no encontrada"));
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Notificacion no encontrada"));
 
         if (!notification.getUser().getId().equals(userId)) {
-            throw new RuntimeException("No tienes permiso para modificar esta notificacion");
+            throw new IllegalStateException("No tienes permiso para modificar esta notificacion");
         }
 
         notification.setRead(true);
@@ -64,7 +64,7 @@ public class NotificationService {
     @Transactional
     public void sendManualNotification(Long saleId, String channel) {
         Sale sale = saleRepository.findById(saleId)
-                .orElseThrow(() -> new RuntimeException("Venta no encontrada"));
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Venta no encontrada"));
 
         User seller = sale.getSeller();
         String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
@@ -268,40 +268,23 @@ public class NotificationService {
     }
 
     private void cleanOrphanedNotifications() {
-        List<Notification> allReminders = notificationRepository.findAll().stream()
-                .filter(n -> n.getType() == NotificationType.SALE_PENDING_REMINDER
-                        || n.getType() == NotificationType.SALE_PENDING_ADMIN_ALERT
-                        || n.getType() == NotificationType.SALE_UNDER_REVIEW)
-                .collect(Collectors.toList());
+        List<NotificationType> allTypes = List.of(
+                NotificationType.SALE_PENDING_REMINDER,
+                NotificationType.SALE_PENDING_ADMIN_ALERT,
+                NotificationType.SALE_UNDER_REVIEW);
 
-        int cleaned = 0;
-        for (Notification notification : allReminders) {
-            if (notification.getReferenceId() != null) {
-                Optional<Sale> sale = saleRepository.findById(notification.getReferenceId());
-                if (sale.isEmpty()) {
-                    notificationRepository.delete(notification);
-                    cleaned++;
-                } else {
-                    SaleStatus status = sale.get().getStatus();
-                    // Limpiar notificaciones PENDING si la venta ya no está PENDING
-                    if ((notification.getType() == NotificationType.SALE_PENDING_REMINDER
-                            || notification.getType() == NotificationType.SALE_PENDING_ADMIN_ALERT)
-                            && status != SaleStatus.PENDING) {
-                        notificationRepository.delete(notification);
-                        cleaned++;
-                    }
-                    // Limpiar notificaciones UNDER_REVIEW si la venta ya no está en revisión
-                    if (notification.getType() == NotificationType.SALE_UNDER_REVIEW
-                            && status != SaleStatus.UNDER_REVIEW) {
-                        notificationRepository.delete(notification);
-                        cleaned++;
-                    }
-                }
-            }
-        }
+        List<NotificationType> pendingTypes = List.of(
+                NotificationType.SALE_PENDING_REMINDER,
+                NotificationType.SALE_PENDING_ADMIN_ALERT);
 
-        if (cleaned > 0) {
-            log.info("Cleaned {} orphaned notifications", cleaned);
+        int deletedOrphans = notificationRepository.deleteOrphanedByDeletedSales(allTypes);
+        int deletedStaleReminders = notificationRepository.deleteStaleRemindersForNonPendingSales(pendingTypes);
+        int deletedStaleReviews = notificationRepository.deleteStaleReviewNotifications(NotificationType.SALE_UNDER_REVIEW);
+
+        int total = deletedOrphans + deletedStaleReminders + deletedStaleReviews;
+        if (total > 0) {
+            log.info("Cleaned {} orphaned notifications (orphans: {}, stale reminders: {}, stale reviews: {})",
+                    total, deletedOrphans, deletedStaleReminders, deletedStaleReviews);
         }
     }
 

@@ -3,6 +3,7 @@ package com.elmayorista.customer;
 import com.elmayorista.fiado.FiadoStatus;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,13 +26,13 @@ public class CustomerFiadoService {
     @Transactional
     public CustomerFiadoDTO createCustomerFiado(UUID sellerId, Long customerId, String itemName, BigDecimal price) {
         User seller = userRepository.findById(sellerId)
-                .orElseThrow(() -> new RuntimeException("Vendedor no encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Vendedor no encontrado"));
 
         Customer customer = customerRepository.findById(customerId)
-                .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado"));
 
         if (customer.getStatus() != CustomerStatus.APPROVED) {
-            throw new RuntimeException("Solo se puede fiar a clientes aprobados");
+            throw new IllegalStateException("Solo se puede fiar a clientes aprobados");
         }
 
         CustomerFiado fiado = CustomerFiado.builder()
@@ -67,7 +68,7 @@ public class CustomerFiadoService {
     @Transactional
     public void adminDeleteCustomerFiado(Long id) {
         CustomerFiado fiado = customerFiadoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Fiado de cliente no encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Fiado de cliente no encontrado"));
         customerFiadoRepository.delete(fiado);
         log.info("Customer fiado {} deleted by admin", id);
     }

@@ -30,7 +30,8 @@ public class PaymentService {
 
     @Transactional
     public PaymentDTO addPayment(CreatePaymentRequest request, MultipartFile file, User registeredBy) {
-        Sale sale = saleRepository.findById(request.getSaleId())
+        // Pessimistic lock para prevenir pagos concurrentes que excedan el total
+        Sale sale = saleRepository.findByIdForUpdate(request.getSaleId())
                 .orElseThrow(() -> new EntityNotFoundException("Venta no encontrada con ID: " + request.getSaleId()));
 
         // Validations
@@ -52,7 +53,7 @@ public class PaymentService {
             try {
                 receiptUrl = fileStorageService.uploadFile(file, "receipts");
             } catch (IOException e) {
-                throw new RuntimeException("Error al subir el archivo de comprobante.", e);
+                throw new IllegalStateException("Error al subir el archivo de comprobante.", e);
             }
         }
 

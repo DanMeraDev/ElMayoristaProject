@@ -67,6 +67,48 @@ Base de datos **PostgreSQL** gestionada por **Spring Data JPA** con Hibernate co
 │ created_at  TIMESTAMP    │       │ created_at  TIMESTAMP   │
 │ updated_at  TIMESTAMP    │       │ updated_at  TIMESTAMP   │
 └──────────────────────────┘       └──────────────────────────┘
+
+┌──────────────────────────┐
+│      notifications       │
+├──────────────────────────┤
+│ id          BIGINT  PK   │
+│ user_id     UUID    FK   │
+│ type        VARCHAR      │
+│ title       VARCHAR      │
+│ message     VARCHAR      │
+│ reference_id BIGINT      │
+│ reference_date TIMESTAMP │
+│ is_read     BOOLEAN      │
+│ last_email_sent_at TIMEST│
+│ created_at  TIMESTAMP    │
+└──────────────────────────┘
+
+┌──────────────────────────┐       ┌──────────────────────────┐
+│       customers          │       │    customer_fiados       │
+├──────────────────────────┤       ├──────────────────────────┤
+│ id          BIGINT  PK   │──────>│ id          BIGINT  PK   │
+│ full_name   VARCHAR(150) │ 1:N   │ customer_id BIGINT  FK   │
+│ id_number   VARCHAR(20)  │       │ seller_id   UUID    FK   │
+│ phone_number VARCHAR(20) │       │ item_name   VARCHAR(200) │
+│ status      VARCHAR      │       │ price       DECIMAL(12,2)│
+│ rejection_reason VARCHAR │       │ status      VARCHAR      │
+│ registered_by UUID   FK  │       │ settled_in_cycle BOOLEAN │
+│ created_at  TIMESTAMP    │       │ created_at  TIMESTAMP    │
+│ updated_at  TIMESTAMP    │       │ updated_at  TIMESTAMP    │
+└──────────────────────────┘       └──────────────────────────┘
+
+┌──────────────────────────┐
+│         fiados           │
+├──────────────────────────┤
+│ id          BIGINT  PK   │
+│ seller_id   UUID    FK   │
+│ item_name   VARCHAR(200) │
+│ price       DECIMAL(12,2)│
+│ status      VARCHAR      │
+│ settled_in_cycle BOOLEAN │
+│ created_at  TIMESTAMP    │
+│ updated_at  TIMESTAMP    │
+└──────────────────────────┘
 ```
 
 ---
@@ -127,6 +169,9 @@ Ventas registradas por los sellers.
 | `order_date` | TIMESTAMP | No | Fecha del pedido |
 | `report_pdf_url` | TEXT | Si | URL del PDF subido a R2 |
 | `rejection_reason` | VARCHAR | Si | Motivo de rechazo (si aplica) |
+| `sale_type` | VARCHAR | No | Tipo de venta (enum SaleType, default: STANDARD) |
+| `tv_serial_number` | VARCHAR | Si | Numero de serie del TV (solo para ventas TV) |
+| `tv_model` | VARCHAR | Si | Modelo del TV (solo para ventas TV) |
 | `commission_settled` | BOOLEAN | No | Si la comision ya fue liquidada (default: false) |
 | `created_at` | TIMESTAMP | No | Fecha de creacion (auto) |
 | `updated_at` | TIMESTAMP | Si | Fecha de actualizacion (auto) |
@@ -204,6 +249,79 @@ Tickets de soporte creados por sellers.
 **Constraints:**
 - `seller_id` - FK → `users.id`
 
+### `notifications`
+Notificaciones en plataforma para sellers y admins.
+
+| Campo | Tipo | Nullable | Descripcion |
+|---|---|---|---|
+| `id` | BIGINT | No | ID auto-incremental |
+| `user_id` | UUID (FK) | No | Usuario destinatario de la notificacion |
+| `type` | VARCHAR | No | Tipo de notificacion (enum NotificationType) |
+| `title` | VARCHAR | No | Titulo de la notificacion |
+| `message` | VARCHAR | No | Mensaje de la notificacion |
+| `reference_id` | BIGINT | Si | ID de la venta referenciada |
+| `reference_date` | TIMESTAMP | Si | Fecha de la venta referenciada |
+| `is_read` | BOOLEAN | No | Si la notificacion fue leida (default: false) |
+| `last_email_sent_at` | TIMESTAMP | Si | Fecha del ultimo email enviado para esta notificacion |
+| `created_at` | TIMESTAMP | No | Fecha de creacion (auto) |
+
+**Constraints:**
+- `user_id` - FK → `users.id`
+
+### `customers`
+Clientes registrados por los sellers para fiar productos.
+
+| Campo | Tipo | Nullable | Descripcion |
+|---|---|---|---|
+| `id` | BIGINT | No | ID auto-incremental |
+| `full_name` | VARCHAR(150) | No | Nombre completo del cliente |
+| `id_number` | VARCHAR(20) | Si | Cedula/RUC del cliente |
+| `phone_number` | VARCHAR(20) | Si | Telefono del cliente |
+| `status` | VARCHAR | No | Estado del cliente (enum CustomerStatus, default: PENDING) |
+| `rejection_reason` | VARCHAR | Si | Motivo de rechazo |
+| `registered_by` | UUID (FK) | No | Seller que registro al cliente |
+| `created_at` | TIMESTAMP | No | Fecha de creacion (auto) |
+| `updated_at` | TIMESTAMP | Si | Fecha de actualizacion (auto) |
+
+**Constraints:**
+- `registered_by` - FK → `users.id`
+
+### `customer_fiados`
+Fiados asociados a clientes registrados.
+
+| Campo | Tipo | Nullable | Descripcion |
+|---|---|---|---|
+| `id` | BIGINT | No | ID auto-incremental |
+| `customer_id` | BIGINT (FK) | No | Cliente al que se le fia |
+| `seller_id` | UUID (FK) | No | Seller que crea el fiado |
+| `item_name` | VARCHAR(200) | No | Nombre del producto fiado |
+| `price` | DECIMAL(12,2) | No | Precio del producto |
+| `status` | VARCHAR | No | Estado del fiado (enum FiadoStatus, default: PENDING) |
+| `settled_in_cycle` | BOOLEAN | No | Si fue liquidado en un ciclo (default: false) |
+| `created_at` | TIMESTAMP | No | Fecha de creacion (auto) |
+| `updated_at` | TIMESTAMP | Si | Fecha de actualizacion (auto) |
+
+**Constraints:**
+- `customer_id` - FK → `customers.id`
+- `seller_id` - FK → `users.id`
+
+### `fiados`
+Fiados personales del seller (sin cliente asociado).
+
+| Campo | Tipo | Nullable | Descripcion |
+|---|---|---|---|
+| `id` | BIGINT | No | ID auto-incremental |
+| `seller_id` | UUID (FK) | No | Seller dueño del fiado |
+| `item_name` | VARCHAR(200) | No | Nombre del producto fiado |
+| `price` | DECIMAL(12,2) | No | Precio del producto |
+| `status` | VARCHAR | No | Estado del fiado (enum FiadoStatus, default: PENDING) |
+| `settled_in_cycle` | BOOLEAN | No | Si fue liquidado en un ciclo (default: false) |
+| `created_at` | TIMESTAMP | No | Fecha de creacion (auto) |
+| `updated_at` | TIMESTAMP | Si | Fecha de actualizacion (auto) |
+
+**Constraints:**
+- `seller_id` - FK → `users.id`
+
 ---
 
 ## Enums del Sistema
@@ -260,18 +378,50 @@ Tickets de soporte creados por sellers.
 | `RECOMMENDATION` | Sugerencia de mejora |
 | `OTHER` | Otro tipo |
 
+### `SaleType` (sale)
+| Valor | Descripcion |
+|---|---|
+| `STANDARD` | Venta estandar de productos |
+| `TV` | Venta de televisor (incluye serial y modelo) |
+
+### `NotificationType` (notification)
+| Valor | Descripcion |
+|---|---|
+| `SALE_PENDING_REMINDER` | Recordatorio al seller de ventas pendientes de pago (24h+) |
+| `SALE_PENDING_ADMIN_ALERT` | Alerta al admin de ventas sin pagar por 30+ dias |
+| `SALE_UNDER_REVIEW` | Notifica a admins cuando una venta pasa a revision |
+
+### `CustomerStatus` (customer)
+| Valor | Descripcion |
+|---|---|
+| `PENDING` | Cliente pendiente de aprobacion |
+| `APPROVED` | Cliente aprobado |
+| `REJECTED` | Cliente rechazado |
+
+### `FiadoStatus` (fiado / customer_fiado)
+| Valor | Descripcion |
+|---|---|
+| `PENDING` | Fiado pendiente |
+| `SETTLED` | Fiado liquidado |
+
 ---
 
 ## Relaciones entre Tablas
 
 ```
-User (1) ────── (N) Sale          Un seller tiene muchas ventas
-User (1) ────── (N) Payment       Un usuario registra muchos pagos (registered_by)
-User (1) ────── (N) SupportTicket Un seller tiene muchos tickets
-User (1) ────── (N) UserRole      Un usuario tiene uno o mas roles
+User (1) ────── (N) Sale            Un seller tiene muchas ventas
+User (1) ────── (N) Payment         Un usuario registra muchos pagos (registered_by)
+User (1) ────── (N) SupportTicket   Un seller tiene muchos tickets
+User (1) ────── (N) UserRole        Un usuario tiene uno o mas roles
+User (1) ────── (N) Notification    Un usuario tiene muchas notificaciones
+User (1) ────── (N) Customer        Un seller registra muchos clientes
+User (1) ────── (N) Fiado           Un seller tiene muchos fiados personales
+User (1) ────── (N) CustomerFiado   Un seller crea muchos fiados de clientes
 
-Sale (1) ────── (N) SaleDetail    Una venta tiene muchos productos (CASCADE)
-Sale (1) ────── (N) Payment       Una venta tiene muchos pagos (CASCADE)
+Sale (1) ────── (N) SaleDetail      Una venta tiene muchos productos (CASCADE)
+Sale (1) ────── (N) Payment         Una venta tiene muchos pagos (CASCADE)
+
+Customer (1) ── (N) CustomerFiado   Un cliente tiene muchos fiados
 ```
 
 **Cascade Delete:**

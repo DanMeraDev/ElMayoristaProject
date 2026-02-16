@@ -2,10 +2,7 @@
 
 Base URL: `http://localhost:8080/api`
 
-Todas las rutas (excepto `/api/auth/**`) requieren el header:
-```
-Authorization: Bearer <JWT_TOKEN>
-```
+Todas las rutas (excepto `/api/auth/**`) requieren autenticacion via cookie HttpOnly `jwt`. El browser envia la cookie automaticamente en cada request (configurado con `withCredentials: true` en Axios).
 
 ---
 
@@ -14,7 +11,7 @@ Authorization: Bearer <JWT_TOKEN>
 Endpoints publicos para autenticacion y gestion de contraseñas.
 
 ### POST `/api/auth/login`
-Inicia sesion y retorna un token JWT.
+Inicia sesion. El token JWT se setea como cookie HttpOnly en la respuesta (no se envia en el body).
 
 **Body:**
 ```json
@@ -27,7 +24,6 @@ Inicia sesion y retorna un token JWT.
 **Respuesta (200):**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiJ9...",
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "usuario@email.com",
   "fullName": "Juan Perez",
@@ -37,6 +33,8 @@ Inicia sesion y retorna un token JWT.
 }
 ```
 
+**Cookie seteada:** `jwt` (HttpOnly, Secure configurable, Path=/, MaxAge=24h)
+
 **Errores:**
 | Codigo | Descripcion |
 |---|---|
@@ -45,7 +43,7 @@ Inicia sesion y retorna un token JWT.
 ---
 
 ### POST `/api/auth/register`
-Registra un nuevo usuario (seller). El usuario queda con `pendingApproval = true`.
+Registra un nuevo usuario (seller). El usuario queda con `pendingApproval = true`. El token JWT se setea como cookie HttpOnly.
 
 **Body:**
 ```json
@@ -60,7 +58,6 @@ Registra un nuevo usuario (seller). El usuario queda con `pendingApproval = true
 **Respuesta (200):**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiJ9...",
   "id": "...",
   "email": "nuevo@email.com",
   "fullName": "Maria Lopez",
@@ -74,6 +71,18 @@ Registra un nuevo usuario (seller). El usuario queda con `pendingApproval = true
 |---|---|
 | 400 | Datos de validacion incorrectos |
 | 409 | Email ya registrado |
+
+---
+
+### POST `/api/auth/logout`
+Cierra sesion borrando la cookie JWT (MaxAge=0).
+
+**Respuesta (200):**
+```json
+{
+  "message": "Logged out successfully"
+}
+```
 
 ---
 
@@ -240,6 +249,33 @@ Crea una venta extrayendo datos de un archivo PDF (Odoo).
 | `file` | File | Archivo PDF del reporte de venta |
 
 **Respuesta (200):** Objeto `SaleDTO`
+
+---
+
+### POST `/api/sales/tv`
+Crea una venta de tipo TV (televisor) con datos especificos.
+
+**Body:**
+```json
+{
+  "customerName": "Cliente Ejemplo",
+  "tvSerialNumber": "SN-123456",
+  "tvModel": "Samsung 55\" 4K",
+  "subtotal": 500.00,
+  "shipping": 10.00,
+  "total": 510.00,
+  "orderDate": "2026-01-15T10:30:00"
+}
+```
+
+**Respuesta (200):** Objeto `SaleDTO` con `saleType: "TV"`
+
+---
+
+### DELETE `/api/sales/{id}`
+Elimina una venta (solo si el vendedor es el dueño y el estado lo permite).
+
+**Respuesta (204):** Sin contenido
 
 ---
 
@@ -604,6 +640,212 @@ Actualiza el estado de un ticket (solo ADMIN).
 ```
 
 **Respuesta (200):** Objeto `TicketDTO` actualizado
+
+---
+
+## Notifications (`/api/notifications`)
+
+Sistema de notificaciones en plataforma. Requiere autenticacion.
+
+### GET `/api/notifications`
+Obtiene las notificaciones del usuario autenticado (maximo 50, ordenadas por fecha descendente).
+
+**Respuesta (200):** Array de `NotificationDTO`
+```json
+[
+  {
+    "id": 1,
+    "type": "SALE_UNDER_REVIEW",
+    "title": "Venta pendiente de revision",
+    "message": "La venta ORD-001 de Juan Perez esta lista para revision. Total: $500.00",
+    "referenceId": 15,
+    "referenceDate": "2026-01-15T10:30:00",
+    "read": false,
+    "createdAt": "2026-01-16T08:00:00"
+  }
+]
+```
+
+---
+
+### GET `/api/notifications/unread-count`
+Obtiene la cantidad de notificaciones no leidas.
+
+**Respuesta (200):**
+```json
+{
+  "count": 3
+}
+```
+
+---
+
+### PUT `/api/notifications/{id}/read`
+Marca una notificacion como leida.
+
+**Respuesta (200):** Sin contenido
+
+---
+
+### PUT `/api/notifications/read-all`
+Marca todas las notificaciones del usuario como leidas.
+
+**Respuesta (200):** Sin contenido
+
+---
+
+### POST `/api/notifications/test-trigger`
+Dispara manualmente el scheduler de notificaciones (solo para testing).
+
+**Respuesta (200):**
+```json
+{
+  "message": "Scheduler ejecutado manualmente"
+}
+```
+
+---
+
+## Customers (`/api/customers`)
+
+Gestion de clientes. Requiere autenticacion.
+
+### POST `/api/customers`
+Registra un nuevo cliente (seller). El cliente queda con `status = PENDING`.
+
+**Body:**
+```json
+{
+  "fullName": "Carlos Rodriguez",
+  "idNumber": "1234567890",
+  "phoneNumber": "0987654321"
+}
+```
+
+**Respuesta (200):** Objeto `CustomerDTO`
+
+---
+
+### GET `/api/customers/approved`
+Obtiene la lista de clientes aprobados.
+
+**Respuesta (200):** Array de `CustomerDTO`
+
+---
+
+### GET `/api/customers/admin/all`
+Obtiene todos los clientes (solo ADMIN).
+
+**Respuesta (200):** Array de `CustomerDTO`
+
+---
+
+### GET `/api/customers/admin/pending`
+Obtiene clientes pendientes de aprobacion (solo ADMIN).
+
+**Respuesta (200):** Array de `CustomerDTO`
+
+---
+
+### POST `/api/customers/admin/{id}/approve`
+Aprueba un cliente pendiente (solo ADMIN).
+
+**Respuesta (200):** Objeto `CustomerDTO`
+
+---
+
+### POST `/api/customers/admin/{id}/reject`
+Rechaza un cliente pendiente (solo ADMIN).
+
+**Body:**
+```json
+{
+  "reason": "Datos incompletos"
+}
+```
+
+**Respuesta (200):** Sin contenido
+
+---
+
+## Fiados (`/api/fiados`)
+
+Gestion de fiados personales del seller. Requiere autenticacion.
+
+### POST `/api/fiados`
+Crea un fiado personal del seller.
+
+**Body:**
+```json
+{
+  "itemName": "Producto fiado",
+  "price": 25.00
+}
+```
+
+**Respuesta (200):** Objeto `FiadoDTO`
+
+---
+
+### GET `/api/fiados/my-fiados`
+Obtiene los fiados del seller autenticado.
+
+**Respuesta (200):** Array de `FiadoDTO`
+
+---
+
+### GET `/api/fiados/admin/all`
+Obtiene todos los fiados (solo ADMIN).
+
+**Respuesta (200):** Array de `FiadoDTO`
+
+---
+
+### DELETE `/api/fiados/admin/{id}`
+Elimina un fiado (solo ADMIN).
+
+**Respuesta (200):** Sin contenido
+
+---
+
+## Customer Fiados (`/api/customer-fiados`)
+
+Gestion de fiados a clientes registrados. Requiere autenticacion.
+
+### POST `/api/customer-fiados`
+Crea un fiado asociado a un cliente aprobado.
+
+**Body:**
+```json
+{
+  "customerId": 1,
+  "itemName": "Televisor Samsung",
+  "price": 500.00
+}
+```
+
+**Respuesta (200):** Objeto `CustomerFiadoDTO`
+
+---
+
+### GET `/api/customer-fiados/my-fiados`
+Obtiene los fiados de clientes del seller autenticado.
+
+**Respuesta (200):** Array de `CustomerFiadoDTO`
+
+---
+
+### GET `/api/customer-fiados/admin/all`
+Obtiene todos los fiados de clientes (solo ADMIN).
+
+**Respuesta (200):** Array de `CustomerFiadoDTO`
+
+---
+
+### DELETE `/api/customer-fiados/admin/{id}`
+Elimina un fiado de cliente (solo ADMIN).
+
+**Respuesta (200):** Sin contenido
 
 ---
 

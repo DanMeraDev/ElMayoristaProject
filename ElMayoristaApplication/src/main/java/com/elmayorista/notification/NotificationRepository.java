@@ -28,4 +28,33 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Modifying
     @Query("UPDATE Notification n SET n.read = true WHERE n.user.id = :userId AND n.read = false")
     void markAllReadByUserId(@Param("userId") UUID userId);
+
+    @Modifying
+    @Query("""
+            DELETE FROM Notification n
+            WHERE n.type IN :types
+            AND n.referenceId IS NOT NULL
+            AND n.referenceId NOT IN (SELECT s.id FROM Sale s)
+            """)
+    int deleteOrphanedByDeletedSales(@Param("types") List<NotificationType> types);
+
+    @Modifying
+    @Query("""
+            DELETE FROM Notification n
+            WHERE n.type IN (:pendingTypes)
+            AND n.referenceId IN (
+                SELECT s.id FROM Sale s WHERE s.status <> com.elmayorista.sale.SaleStatus.PENDING
+            )
+            """)
+    int deleteStaleRemindersForNonPendingSales(@Param("pendingTypes") List<NotificationType> types);
+
+    @Modifying
+    @Query("""
+            DELETE FROM Notification n
+            WHERE n.type = :reviewType
+            AND n.referenceId IN (
+                SELECT s.id FROM Sale s WHERE s.status <> com.elmayorista.sale.SaleStatus.UNDER_REVIEW
+            )
+            """)
+    int deleteStaleReviewNotifications(@Param("reviewType") NotificationType type);
 }

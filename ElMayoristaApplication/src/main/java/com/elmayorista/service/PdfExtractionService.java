@@ -67,7 +67,7 @@ public class PdfExtractionService {
 
             return sale;
         } catch (Exception e) {
-            throw new RuntimeException("Error extracting sale data from PDF: " + e.getMessage(), e);
+            throw new IllegalStateException("Error al extraer datos del PDF: " + e.getMessage(), e);
         }
     }
 
@@ -92,7 +92,7 @@ public class PdfExtractionService {
             PDFTextStripper pdfStripper = new PDFTextStripper();
             return pdfStripper.getText(document);
         } catch (Exception e) {
-            throw new RuntimeException("Error extracting text from PDF", e);
+            throw new IllegalStateException("Error al extraer texto del PDF", e);
         }
     }
 }

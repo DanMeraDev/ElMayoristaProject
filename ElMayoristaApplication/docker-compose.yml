@@ -5,12 +5,48 @@ services:
     restart: always
     environment:
       POSTGRES_DB: el_mayorista
-      POSTGRES_USER: mayorista_user
-      POSTGRES_PASSWORD: mayorista_pass
+      POSTGRES_USER: ${DB_USERNAME:-mayorista_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mayorista_pass}
     ports:
       - "5432:5432"
     volumes:
       - elmayorista_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-mayorista_user} -d el_mayorista"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: el_mayorista_backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/el_mayorista
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    ports:
+      - "8080:8080"
+    volumes:
+      - backend_logs:/app/logs
+
+  frontend:
+    build:
+      context: ../mayorista-frontend
+      dockerfile: Dockerfile
+    container_name: el_mayorista_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
 
 volumes:
   elmayorista_pgdata:
+  backend_logs:

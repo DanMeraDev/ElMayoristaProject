@@ -3,6 +3,7 @@ package com.elmayorista.support;
 import com.elmayorista.service.EmailService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,7 +32,7 @@ public class SupportTicketService {
     @Transactional
     public TicketDTO createTicket(java.util.UUID sellerId, TicketType type, String subject, String description) {
         User seller = userRepository.findById(sellerId)
-                .orElseThrow(() -> new RuntimeException("Seller not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Vendedor no encontrado"));
 
         SupportTicket ticket = SupportTicket.builder()
                 .seller(seller)
@@ -66,7 +67,7 @@ public class SupportTicketService {
      */
     public List<TicketDTO> getSellerTickets(java.util.UUID sellerId) {
         User seller = userRepository.findById(sellerId)
-                .orElseThrow(() -> new RuntimeException("Seller not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Vendedor no encontrado"));
 
         return ticketRepository.findBySellerOrderByCreatedAtDesc(seller)
                 .stream()
@@ -110,7 +111,7 @@ public class SupportTicketService {
     @Transactional
     public TicketDTO updateTicketStatus(Long ticketId, TicketStatus status, String adminNotes) {
         SupportTicket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new RuntimeException("Ticket not found"));
+                .orElseThrow(() -> new EntityNotFoundException("Ticket no encontrado"));
 
         ticket.setStatus(status);
         if (adminNotes != null) {

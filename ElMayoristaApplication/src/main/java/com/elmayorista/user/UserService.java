@@ -1,10 +1,13 @@
 package com.elmayorista.user;
 
-import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleRepository;
 import com.elmayorista.sale.SaleStatus;
+import com.elmayorista.config.CacheConfig;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -180,6 +183,10 @@ public class UserService implements UserDetailsService {
      * @param commissionPercentage Nuevo porcentaje de comisión
      * @return Usuario actualizado
      */
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.USERS_CACHE, key = "#userId"),
+            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, key = "#userId")
+    })
     @Transactional
     public User updateVendorCommission(UUID userId, BigDecimal commissionPercentage) {
         User user = getUserById(userId);
@@ -226,42 +233,29 @@ public class UserService implements UserDetailsService {
      * @param vendorId ID del seller
      * @return Objeto con las estadísticas de comisiones
      */
+    @Cacheable(value = CacheConfig.COMMISSION_STATS_CACHE, key = "#vendorId")
     @Transactional(readOnly = true)
     public VendorCommissionStats getVendorCommissionStats(UUID vendorId) {
         User vendor = getUserById(vendorId);
 
-        // Verificar que sea un seller
         if (!vendor.getRoles().contains(Role.SELLER)) {
             throw new IllegalStateException("El usuario no es un seller");
         }
 
-        // Obtener ventas del vendedor
-        List<Sale> vendorSales = saleRepository.findBySeller(vendor);
+        // Queries agregadas en vez de cargar todas las ventas en memoria
+        BigDecimal earnedCommission = saleRepository.sumCommissionBySellerAndStatusAndSettled(
+                vendor, SaleStatus.APPROVED, false);
+        BigDecimal receivedCommission = saleRepository.sumCommissionBySellerAndStatusAndSettled(
+                vendor, SaleStatus.APPROVED, true);
+        BigDecimal pendingReviewCommission = saleRepository.sumCommissionBySellerAndStatus(
+                vendor, SaleStatus.UNDER_REVIEW);
+        BigDecimal pendingPaymentCommission = saleRepository.sumCommissionBySellerAndStatus(
+                vendor, SaleStatus.PENDING);
 
-        BigDecimal earnedCommission = BigDecimal.ZERO;
-        BigDecimal receivedCommission = BigDecimal.ZERO;
-        BigDecimal pendingReviewCommission = BigDecimal.ZERO;
-        BigDecimal pendingPaymentCommission = BigDecimal.ZERO;
-
-        for (Sale sale : vendorSales) {
-            BigDecimal commissionAmount = sale.getCommissionAmount();
-
-            switch (sale.getStatus()) {
-                case APPROVED:
-                    if (!sale.isCommissionSettled()) {
-                        earnedCommission = earnedCommission.add(commissionAmount);
-                    } else {
-                        receivedCommission = receivedCommission.add(commissionAmount);
-                    }
-                    break;
-                case UNDER_REVIEW:
-                    pendingReviewCommission = pendingReviewCommission.add(commissionAmount);
-                    break;
-                case PENDING:
-                    pendingPaymentCommission = pendingPaymentCommission.add(commissionAmount);
-                    break;
-            }
-        }
+        long totalSales = saleRepository.countBySeller(vendor);
+        long approvedCount = saleRepository.countBySellerAndStatus(vendor, SaleStatus.APPROVED);
+        long underReviewCount = saleRepository.countBySellerAndStatus(vendor, SaleStatus.UNDER_REVIEW);
+        long pendingCount = saleRepository.countBySellerAndStatus(vendor, SaleStatus.PENDING);
 
         return VendorCommissionStats.builder()
                 .vendorId(vendorId)
@@ -269,12 +263,10 @@ public class UserService implements UserDetailsService {
                 .receivedCommission(receivedCommission)
                 .pendingReviewCommission(pendingReviewCommission)
                 .pendingPaymentCommission(pendingPaymentCommission)
-                .totalSalesCount(vendorSales.size())
-                .approvedSalesCount(
-                        (int) vendorSales.stream().filter(s -> s.getStatus() == SaleStatus.APPROVED).count())
-                .underReviewSalesCount(
-                        (int) vendorSales.stream().filter(s -> s.getStatus() == SaleStatus.UNDER_REVIEW).count())
-                .pendingSalesCount((int) vendorSales.stream().filter(s -> s.getStatus() == SaleStatus.PENDING).count())
+                .totalSalesCount((int) totalSales)
+                .approvedSalesCount((int) approvedCount)
+                .underReviewSalesCount((int) underReviewCount)
+                .pendingSalesCount((int) pendingCount)
                 .commissionPercentage(vendor.getCommissionPercentage())
                 .build();
     }
@@ -284,12 +276,13 @@ public class UserService implements UserDetailsService {
      * 
      * @return Objeto con estadísticas globales del sistema
      */
+    @Cacheable(CacheConfig.DASHBOARD_STATS_CACHE)
     @Transactional(readOnly = true)
     public AdminDashboardStats getAdminDashboardStats() {
         long pendingVendors = countPendingVendors();
         long totalVendors = userRepository.countByRoleAndEnabled(Role.SELLER, true);
-        long pendingSales = saleRepository.findByStatus(SaleStatus.PENDING).size();
-        long underReviewSales = saleRepository.findByStatus(SaleStatus.UNDER_REVIEW).size();
+        long pendingSales = saleRepository.countByStatus(SaleStatus.PENDING);
+        long underReviewSales = saleRepository.countByStatus(SaleStatus.UNDER_REVIEW);
 
         BigDecimal totalApprovedSales = saleRepository.sumTotalByStatus(SaleStatus.APPROVED);
         if (totalApprovedSales == null) {
@@ -347,6 +340,7 @@ public class UserService implements UserDetailsService {
         return userRepository.save(user);
     }
 
+    @Cacheable(value = CacheConfig.USERS_CACHE, key = "#id")
     @Transactional(readOnly = true)
     public User getUserById(UUID id) {
         return userRepository.findById(id)
@@ -358,6 +352,7 @@ public class UserService implements UserDetailsService {
         return userRepository.findByEmail(email);
     }
 
+    @CacheEvict(value = CacheConfig.USERS_CACHE, key = "#id")
     @Transactional
     public User updateUser(UUID id, User updatedUser) {
         User existingUser = getUserById(id);
@@ -386,6 +381,7 @@ public class UserService implements UserDetailsService {
      * @param request DTO con los permisos a actualizar
      * @return Usuario actualizado
      */
+    @CacheEvict(value = CacheConfig.USERS_CACHE, key = "#userId")
     @Transactional
     public User updateSellerPermissions(UUID userId, UpdatePermissionsRequest request) {
         User user = getUserById(userId);

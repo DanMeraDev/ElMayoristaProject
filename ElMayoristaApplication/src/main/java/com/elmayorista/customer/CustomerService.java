@@ -2,6 +2,7 @@ package com.elmayorista.customer;
 
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,10 +23,10 @@ public class CustomerService {
     @Transactional
     public CustomerDTO registerCustomer(UUID sellerId, String fullName, String idNumber, String phoneNumber) {
         User seller = userRepository.findById(sellerId)
-                .orElseThrow(() -> new RuntimeException("Vendedor no encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Vendedor no encontrado"));
 
         if (idNumber != null && !idNumber.isBlank() && customerRepository.existsByIdNumber(idNumber)) {
-            throw new RuntimeException("Ya existe un cliente con esa cedula");
+            throw new IllegalArgumentException("Ya existe un cliente con esa cedula");
         }
 
         Customer customer = Customer.builder()
@@ -69,10 +70,10 @@ public class CustomerService {
     @Transactional
     public CustomerDTO approveCustomer(Long id) {
         Customer customer = customerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado"));
 
         if (customer.getStatus() != CustomerStatus.PENDING) {
-            throw new RuntimeException("Solo se pueden aprobar clientes pendientes");
+            throw new IllegalStateException("Solo se pueden aprobar clientes pendientes");
         }
 
         customer.setStatus(CustomerStatus.APPROVED);
@@ -86,14 +87,14 @@ public class CustomerService {
     @Transactional
     public void rejectCustomer(Long id, String reason) {
         Customer customer = customerRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
+                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado"));
 
         if (customer.getStatus() != CustomerStatus.PENDING) {
-            throw new RuntimeException("Solo se pueden rechazar clientes pendientes");
+            throw new IllegalStateException("Solo se pueden rechazar clientes pendientes");
         }
 
         if (reason == null || reason.isBlank()) {
-            throw new RuntimeException("Se requiere un motivo de rechazo");
+            throw new IllegalArgumentException("Se requiere un motivo de rechazo");
         }
 
         customer.setStatus(CustomerStatus.REJECTED);

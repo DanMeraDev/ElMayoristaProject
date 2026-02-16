@@ -88,6 +88,6 @@ public class SaleController {
         // Asumiendo que el principal es el email o UserDetails
         String email = authentication.getName();
         return userService.getUserByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario autenticado no encontrado"));
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Usuario autenticado no encontrado"));
     }
 }

@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { login as loginRequest, getCurrentUser, logout as logoutRequest } from '../api/auth.api';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { login as loginRequest, getCurrentUser, logout as logoutRequest, registerSeller } from '../api/auth.api';
 
 const AuthContext = createContext();
 
@@ -50,79 +50,79 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
 
-  const signup = async (user) => {
+  const signup = useCallback(async (userData) => {
     try {
-      const res = await import('../api/auth.api').then(module => module.registerSeller(user));
+      const res = await registerSeller(userData);
       return res.data;
     } catch (error) {
-      if (Array.isArray(error.response.data)) {
-        return setErrors(error.response.data);
+      if (Array.isArray(error.response?.data)) {
+        setErrors(error.response.data);
+      } else {
+        setErrors([error.response?.data?.message || 'Error en el registro']);
       }
-      setErrors([error.response.data.message]);
       throw error;
     }
-  };
+  }, []);
 
-  const signin = async (user) => {
+  const signin = useCallback(async (userData) => {
     try {
-      const res = await loginRequest(user);
-      // Token se maneja por cookie HttpOnly, solo guardamos datos del usuario en state
-      const userData = res.data;
-      setUser(userData);
+      const res = await loginRequest(userData);
+      const freshUser = res.data;
+      setUser(freshUser);
       setIsAuthenticated(true);
       return res.data;
     } catch (error) {
-      if (Array.isArray(error.response.data)) {
+      if (Array.isArray(error.response?.data)) {
         setErrors(error.response.data);
       } else if (error.response?.data?.message) {
         setErrors([error.response.data.message]);
-      } else if (typeof error.response.data === 'object') {
+      } else if (typeof error.response?.data === 'object') {
         setErrors(Object.values(error.response.data));
       } else {
-        setErrors(["Login failed"]);
+        setErrors(['Error al iniciar sesion']);
       }
       throw error;
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await logoutRequest();
-    } catch (error) {
-      // Ignorar errores al cerrar sesión
+    } catch {
+      // Ignorar errores al cerrar sesion
     }
     setUser(null);
     setIsAuthenticated(false);
     window.location.href = '/login';
-  };
+  }, []);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const res = await getCurrentUser();
-      const userData = res.data;
-      setUser(userData);
-      return userData;
+      const freshUser = res.data;
+      setUser(freshUser);
+      return freshUser;
     } catch (error) {
       if (error.response?.status === 401) {
         logout();
       }
       throw error;
     }
-  };
+  }, [logout]);
+
+  const value = useMemo(() => ({
+    signup,
+    signin,
+    logout,
+    refreshUser,
+    user,
+    isAuthenticated,
+    isLoading,
+    errors,
+  }), [signup, signin, logout, refreshUser, user, isAuthenticated, isLoading, errors]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        signup,
-        signin,
-        logout,
-        refreshUser,
-        user,
-        isAuthenticated,
-        isLoading,
-        errors,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
