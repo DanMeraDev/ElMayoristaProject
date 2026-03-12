@@ -56,6 +56,19 @@ public class FiadoController {
         return ResponseEntity.ok(fiadoService.getAllFiados());
     }
 
+    @PostMapping("/admin/{id}/approve")
+    public ResponseEntity<FiadoDTO> adminApproveFiado(@PathVariable Long id) {
+        log.info("Admin approving fiado {}", id);
+        return ResponseEntity.ok(fiadoService.adminApproveFiado(id));
+    }
+
+    @PostMapping("/admin/{id}/reject")
+    public ResponseEntity<Void> adminRejectFiado(@PathVariable Long id) {
+        log.info("Admin rejecting fiado {}", id);
+        fiadoService.adminRejectFiado(id);
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/admin/{id}")
     public ResponseEntity<Void> adminDeleteFiado(@PathVariable Long id) {
         log.info("Admin deleting fiado {}", id);

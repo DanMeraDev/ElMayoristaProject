@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
-import { MessageSquare, Bug, Lightbulb, Send, Filter, CheckCircle, Clock, XCircle, Moon, Sun, ChevronLeft, ChevronRight, LogOut, X } from 'lucide-react';
+import { MessageSquare, Bug, Lightbulb, Send, Filter, CheckCircle, Clock, XCircle, LogOut, X } from 'lucide-react';
 import SellerSidebar from '../components/SellerSidebar';
 import SellerFooter from '../components/SellerFooter';
-import NotificationBell from '../../components/NotificationBell';
+import SellerTopbar from '../components/SellerTopbar';
 import { createTicket, getMyTickets } from '../../api/support.api';
 
 const SellerSupport = () => {
     const navigate = useNavigate();
     const { user, logout } = useAuth();
-    const { isDarkMode, toggleDarkMode } = useDarkMode();
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -125,28 +123,11 @@ const SellerSupport = () => {
                 {/* Main Content Area */}
                 <main className={`flex-1 flex flex-col h-full overflow-y-auto transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
                     {/* Top Header */}
-                    <header className="bg-white dark:bg-surface-dark border-b border-gray-200 dark:border-border-dark h-16 flex items-center justify-between px-6 sticky top-0 z-20 shadow-sm transition-colors duration-200">
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                                className={`flex mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500 dark:text-slate-400 ${isSidebarOpen ? 'md:hidden' : ''}`}
-                                title={isSidebarOpen ? "Cerrar menú" : "Mostrar menú"}
-                            >
-                                {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                            </button>
-                            <h1 className="text-xl font-semibold text-gray-800 dark:text-white">Soporte Técnico</h1>
-                        </div>
-                        <div className="flex items-center gap-4 md:gap-6">
-                            <button
-                                onClick={toggleDarkMode}
-                                className="p-2 text-gray-400 hover:text-primary dark:text-slate-400 dark:hover:text-white rounded-full hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                                title={isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-                            >
-                                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                            </button>
-                            <NotificationBell />
-                        </div>
-                    </header>
+                    <SellerTopbar
+                        isSidebarOpen={isSidebarOpen}
+                        onSidebarOpen={() => setIsSidebarOpen(true)}
+                        title="Soporte"
+                    />
 
                     {/* Main Content */}
                     <div className="p-8 max-w-7xl mx-auto flex-1">

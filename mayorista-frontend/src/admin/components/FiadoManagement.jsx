@@ -7,10 +7,14 @@ import {
     Trash2,
     Clock,
     CheckCircle,
+    XCircle,
     DollarSign,
     Users
 } from 'lucide-react';
-import { getAllFiados, adminDeleteFiado, getAllCustomerFiados, adminDeleteCustomerFiado } from '../../api/admin.api';
+import {
+    getAllFiados, adminDeleteFiado, adminApproveFiado, adminRejectFiado,
+    getAllCustomerFiados, adminDeleteCustomerFiado, adminApproveCustomerFiado, adminRejectCustomerFiado
+} from '../../api/admin.api';
 
 function FiadoManagement() {
     const [sellerFiados, setSellerFiados] = useState([]);
@@ -20,6 +24,7 @@ function FiadoManagement() {
     const [searchTerm, setSearchTerm] = useState('');
     const [deleteModal, setDeleteModal] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [actionLoading, setActionLoading] = useState({});
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [typeFilter, setTypeFilter] = useState('ALL');
 
@@ -84,6 +89,42 @@ function FiadoManagement() {
     const totalPending = allFiados
         .filter(f => f.status === 'PENDING')
         .reduce((sum, f) => sum + f.price, 0);
+
+    const handleApprove = async (fiado) => {
+        const key = `${fiado._type}-${fiado.id}`;
+        setActionLoading(prev => ({ ...prev, [key]: 'approving' }));
+        try {
+            if (fiado._type === 'customer') {
+                await adminApproveCustomerFiado(fiado.id);
+            } else {
+                await adminApproveFiado(fiado.id);
+            }
+            loadAllFiados();
+        } catch (err) {
+            setError('Error al aprobar el fiado.');
+            setTimeout(() => setError(''), 3000);
+        } finally {
+            setActionLoading(prev => { const s = { ...prev }; delete s[key]; return s; });
+        }
+    };
+
+    const handleReject = async (fiado) => {
+        const key = `${fiado._type}-${fiado.id}`;
+        setActionLoading(prev => ({ ...prev, [key]: 'rejecting' }));
+        try {
+            if (fiado._type === 'customer') {
+                await adminRejectCustomerFiado(fiado.id);
+            } else {
+                await adminRejectFiado(fiado.id);
+            }
+            loadAllFiados();
+        } catch (err) {
+            setError('Error al rechazar el fiado.');
+            setTimeout(() => setError(''), 3000);
+        } finally {
+            setActionLoading(prev => { const s = { ...prev }; delete s[key]; return s; });
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -156,7 +197,9 @@ function FiadoManagement() {
                     className="px-4 py-2.5 border border-border-light dark:border-border-dark rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary shadow-sm"
                 >
                     <option value="ALL">Todos los estados</option>
-                    <option value="PENDING">Pendientes</option>
+                    <option value="PENDING">Por aprobar</option>
+                    <option value="APPROVED">Aprobados</option>
+                    <option value="REJECTED">Rechazados</option>
                     <option value="SETTLED">Liquidados</option>
                 </select>
             </div>
@@ -227,12 +270,25 @@ function FiadoManagement() {
                                             ${fiado.price.toFixed(2)}
                                         </td>
                                         <td className="py-4 px-6 text-center">
-                                            {fiado.status === 'PENDING' ? (
+                                            {fiado.status === 'PENDING' && (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
                                                     <Clock className="w-3 h-3" />
-                                                    Pendiente
+                                                    Por aprobar
                                                 </span>
-                                            ) : (
+                                            )}
+                                            {fiado.status === 'APPROVED' && (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                    <CheckCircle className="w-3 h-3" />
+                                                    Aprobado
+                                                </span>
+                                            )}
+                                            {fiado.status === 'REJECTED' && (
+                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                                                    <XCircle className="w-3 h-3" />
+                                                    Rechazado
+                                                </span>
+                                            )}
+                                            {fiado.status === 'SETTLED' && (
                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                                                     <CheckCircle className="w-3 h-3" />
                                                     Liquidado
@@ -243,13 +299,40 @@ function FiadoManagement() {
                                             {new Date(fiado.createdAt).toLocaleDateString('es-EC')}
                                         </td>
                                         <td className="py-4 px-6 text-center">
-                                            <button
-                                                onClick={() => setDeleteModal(fiado)}
-                                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                title="Eliminar fiado"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            {fiado.status === 'PENDING' ? (
+                                                <div className="flex items-center justify-center gap-1.5">
+                                                    <button
+                                                        onClick={() => handleApprove(fiado)}
+                                                        disabled={!!actionLoading[`${fiado._type}-${fiado.id}`]}
+                                                        className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
+                                                        title="Aprobar fiado"
+                                                    >
+                                                        {actionLoading[`${fiado._type}-${fiado.id}`] === 'approving'
+                                                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                            : <CheckCircle className="w-3 h-3" />}
+                                                        Aprobar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleReject(fiado)}
+                                                        disabled={!!actionLoading[`${fiado._type}-${fiado.id}`]}
+                                                        className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-md transition-colors disabled:opacity-50 flex items-center gap-1"
+                                                        title="Rechazar fiado"
+                                                    >
+                                                        {actionLoading[`${fiado._type}-${fiado.id}`] === 'rejecting'
+                                                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                            : <XCircle className="w-3 h-3" />}
+                                                        Rechazar
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => setDeleteModal(fiado)}
+                                                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                    title="Eliminar fiado"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

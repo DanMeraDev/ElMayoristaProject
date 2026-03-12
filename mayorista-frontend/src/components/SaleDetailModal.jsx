@@ -1,7 +1,27 @@
-import { useEffect, useCallback } from 'react';
-import { X, DollarSign, FileText, CheckCircle, Upload, Image as ImageIcon, Tv } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { X, DollarSign, FileText, CheckCircle, Upload, Image as ImageIcon, Tv, Loader2 } from 'lucide-react';
+import axios from '../api/axios';
 
 function SaleDetailModal({ sale, onClose, children, userCommission }) {
+    const [fullSale, setFullSale] = useState(sale);
+    const [loadingDetails, setLoadingDetails] = useState(false);
+
+    // Fetch fresh sale data when modal opens
+    useEffect(() => {
+        if (!sale?.id) return;
+        setFullSale(sale); // show immediately with whatever data we have
+        setLoadingDetails(true);
+        axios.get(`/sales/${sale.id}`)
+            .then(res => {
+                setFullSale(res.data);
+            })
+            .catch(err => {
+                console.error('Error fetching sale details:', err);
+                // keep using prop data as fallback
+            })
+            .finally(() => setLoadingDetails(false));
+    }, [sale?.id]);
+
     // Cerrar con Escape
     const handleKeyDown = useCallback((e) => {
         if (e.key === 'Escape') onClose();
@@ -9,7 +29,6 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
 
     useEffect(() => {
         document.addEventListener('keydown', handleKeyDown);
-        // Prevenir scroll del body cuando el modal está abierto
         document.body.style.overflow = 'hidden';
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
@@ -18,6 +37,8 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
     }, [handleKeyDown]);
 
     if (!sale) return null;
+
+    const s = fullSale || sale;
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
@@ -63,7 +84,7 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
         }
     };
 
-    const commissionPercent = sale.commissionPercentage || userCommission || 5;
+    const commissionPercent = s.commissionPercentage || userCommission || 5;
 
     return (
         <div
@@ -79,12 +100,12 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
             >
                 <div className="sticky top-0 bg-white dark:bg-surface-dark px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between z-10">
                     <h3 id="sale-detail-title" className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        {sale.saleType === 'TV' && (
+                        {s.saleType === 'TV' && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-md">
                                 <Tv className="w-3.5 h-3.5" /> TV
                             </span>
                         )}
-                        Detalle Venta #{sale.orderNumber || sale.id}
+                        Detalle Venta #{s.orderNumber || s.id}
                     </h3>
                     <button
                         onClick={onClose}
@@ -100,34 +121,34 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Cliente</p>
-                            <p className="font-medium text-gray-800 dark:text-white">{sale.customerName || sale.clientName || sale.customer?.name || '-'}</p>
+                            <p className="font-medium text-gray-800 dark:text-white">{s.customerName || s.clientName || s.customer?.name || '-'}</p>
                         </div>
                         <div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Fecha</p>
-                            <p className="font-medium text-gray-800 dark:text-white">{formatDate(sale.orderDate || sale.date || sale.createdAt)}</p>
+                            <p className="font-medium text-gray-800 dark:text-white">{formatDate(s.orderDate || s.date || s.createdAt)}</p>
                         </div>
                         <div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Estado</p>
-                            <span className={`text-xs px-2 py-1 rounded-full border inline-block ${getStatusColor(sale.status)}`}>
-                                {getStatusLabel(sale.status)}
+                            <span className={`text-xs px-2 py-1 rounded-full border inline-block ${getStatusColor(s.status)}`}>
+                                {getStatusLabel(s.status)}
                             </span>
                         </div>
                         <div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Número de Orden</p>
-                            <p className="font-medium text-gray-800 dark:text-white">#{sale.orderNumber || sale.id}</p>
+                            <p className="font-medium text-gray-800 dark:text-white">#{s.orderNumber || s.id}</p>
                         </div>
                     </div>
 
                     {/* Rejection Reason */}
-                    {sale.status?.toUpperCase() === 'REJECTED' && sale.rejectionReason && (
+                    {s.status?.toUpperCase() === 'REJECTED' && s.rejectionReason && (
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                             <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-1">Motivo del Rechazo:</p>
-                            <p className="text-sm text-red-600 dark:text-red-300">{sale.rejectionReason}</p>
+                            <p className="text-sm text-red-600 dark:text-red-300">{s.rejectionReason}</p>
                         </div>
                     )}
 
                     {/* TV Data */}
-                    {sale.saleType === 'TV' && (
+                    {s.saleType === 'TV' && (
                         <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
                             <div className="flex items-center gap-2 mb-3">
                                 <Tv className="w-4 h-4 text-purple-600 dark:text-purple-400" />
@@ -136,11 +157,11 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <p className="text-xs text-purple-600 dark:text-purple-400">Numero de Serie</p>
-                                    <p className="text-sm font-medium text-gray-800 dark:text-white">{sale.tvSerialNumber || '-'}</p>
+                                    <p className="text-sm font-medium text-gray-800 dark:text-white">{s.tvSerialNumber || '-'}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-purple-600 dark:text-purple-400">Modelo</p>
-                                    <p className="text-sm font-medium text-gray-800 dark:text-white">{sale.tvModel || '-'}</p>
+                                    <p className="text-sm font-medium text-gray-800 dark:text-white">{s.tvModel || '-'}</p>
                                 </div>
                             </div>
                         </div>
@@ -150,15 +171,15 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-2">
                         <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">Subtotal</span>
-                            <span className="text-gray-800 dark:text-white">{formatCurrency(sale.subtotal)}</span>
+                            <span className="text-gray-800 dark:text-white">{formatCurrency(s.subtotal)}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">Envío</span>
-                            <span className="text-gray-800 dark:text-white">{formatCurrency(sale.shippingCost || sale.shipping || 0)}</span>
+                            <span className="text-gray-800 dark:text-white">{formatCurrency(s.shippingCost || s.shipping || 0)}</span>
                         </div>
                         <div className="flex justify-between font-bold text-lg border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
                             <span className="text-gray-800 dark:text-white">Total Venta</span>
-                            <span className="text-mayorista-red text-red-600 dark:text-red-400">{formatCurrency(sale.totalAmount || sale.total)}</span>
+                            <span className="text-mayorista-red text-red-600 dark:text-red-400">{formatCurrency(s.totalAmount || s.total)}</span>
                         </div>
                     </div>
 
@@ -168,31 +189,24 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                             <div>
                                 <p className="text-sm text-green-700 dark:text-green-400">Comisión ({commissionPercent}%)</p>
                                 <p className="text-xl font-bold text-green-700 dark:text-green-400">
-                                    {formatCurrency(sale.commissionAmount)}
+                                    {formatCurrency(s.commissionAmount)}
                                 </p>
                             </div>
                             <DollarSign className="w-8 h-8 text-green-500 dark:text-green-400" />
                         </div>
                     </div>
 
-                    {/* Receipt Image */}
-                    {sale.receiptImageUrl && (
-                        <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Comprobante</p>
-                            <img
-                                src={sale.receiptImageUrl}
-                                alt="Comprobante"
-                                className="rounded-lg max-w-full h-auto border border-gray-200 dark:border-gray-700"
-                            />
+                    {/* Payments / Comprobantes Section */}
+                    {loadingDetails ? (
+                        <div className="flex items-center justify-center py-4">
+                            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                            <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">Cargando comprobantes...</span>
                         </div>
-                    )}
-
-                    {/* Payments List (if detailed payments exist) */}
-                    {sale.payments && sale.payments.length > 0 && (
+                    ) : s.payments && s.payments.length > 0 ? (
                         <div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Historial de Pagos</p>
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comprobantes de Pago ({s.payments.length})</p>
                             <div className="space-y-3">
-                                {sale.payments.map((payment, index) => (
+                                {s.payments.map((payment, index) => (
                                     <div key={payment.id || index} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                         <div className="bg-gray-50 dark:bg-gray-800 px-3 py-2 flex justify-between items-center text-sm">
                                             <span className="font-medium text-gray-700 dark:text-gray-300">Pago #{index + 1}</span>
@@ -205,8 +219,25 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                                             </div>
                                             {payment.receiptUrl && (
                                                 <div className="mt-2">
-                                                    <a href={payment.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
-                                                        <ImageIcon className="w-3 h-3" /> Ver Comprobante
+                                                    <img
+                                                        src={payment.receiptUrl}
+                                                        alt={`Comprobante de pago ${index + 1}`}
+                                                        className="rounded-lg max-w-full h-auto border border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-90 transition-opacity"
+                                                        onClick={() => window.open(payment.receiptUrl, '_blank')}
+                                                        onError={(e) => {
+                                                            // If image fails to load (e.g. PDF), show as link instead
+                                                            e.target.style.display = 'none';
+                                                            e.target.nextSibling.style.display = 'flex';
+                                                        }}
+                                                    />
+                                                    <a
+                                                        href={payment.receiptUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline items-center gap-1 hidden"
+                                                        style={{ display: 'none' }}
+                                                    >
+                                                        <FileText className="w-3 h-3" /> Ver Comprobante
                                                     </a>
                                                 </div>
                                             )}
@@ -215,16 +246,20 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                                 ))}
                             </div>
                         </div>
+                    ) : !loadingDetails && (
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                            <p className="text-sm text-yellow-700 dark:text-yellow-300">No hay comprobantes de pago registrados.</p>
+                        </div>
                     )}
 
                     {/* Report PDF */}
-                    {sale.reportPdfUrl && (
+                    {s.reportPdfUrl && (
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <p className="text-sm text-gray-500 dark:text-gray-400">Reporte PDF</p>
                                 <a
-                                    href={sale.reportPdfUrl}
-                                    download={`Reporte-${sale.orderNumber || sale.id}.pdf`}
+                                    href={s.reportPdfUrl}
+                                    download={`Reporte-${s.orderNumber || s.id}.pdf`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 hover:underline flex items-center gap-1"
@@ -234,11 +269,11 @@ function SaleDetailModal({ sale, onClose, children, userCommission }) {
                                 </a>
                             </div>
                             <iframe
-                                src={sale.reportPdfUrl}
+                                src={s.reportPdfUrl}
                                 width="100%"
                                 height="300px"
                                 className="rounded-lg border border-gray-200 dark:border-gray-700"
-                                title={`Reporte de Venta ${sale.orderNumber || sale.id}`}
+                                title={`Reporte de Venta ${s.orderNumber || s.id}`}
                             >
                                 Cargando PDF...
                             </iframe>

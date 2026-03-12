@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -121,8 +122,9 @@ public class ReportController {
     /**
      * Close the current cycle and download the ZIP report (Ventas + Fiados + Televisores).
      */
+    @PreAuthorize("hasAuthority('ADMIN')")
     @PostMapping("/close-cycle")
-    public ResponseEntity<byte[]> closeCycle() {
+    public ResponseEntity<?> closeCycle() {
         try {
             byte[] report = cycleService.closeCycle();
 
@@ -131,15 +133,20 @@ public class ReportController {
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=" + filename)
-                    .contentType(org.springframework.http.MediaType
-                            .parseMediaType("application/zip"))
+                    .contentType(org.springframework.http.MediaType.parseMediaType("application/zip"))
                     .body(report);
 
         } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(e.getMessage().getBytes());
+            log.warn("Cycle close rejected: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(java.util.Map.of("message", e.getMessage()));
         } catch (Exception e) {
             log.error("Error closing cycle", e);
-            return ResponseEntity.internalServerError().build();
+            String msg = e.getMessage() != null ? e.getMessage() : "Error interno al generar el reporte";
+            return ResponseEntity.internalServerError()
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(java.util.Map.of("message", msg));
         }
     }
 }

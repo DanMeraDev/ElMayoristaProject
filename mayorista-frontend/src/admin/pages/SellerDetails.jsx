@@ -12,26 +12,26 @@ import {
     Calendar,
     Eye,
     X,
-    Moon,
-    Sun,
     LayoutDashboard,
     BarChart3,
     Settings,
     RefreshCw,
-    CheckCircle
+    CheckCircle,
+    MapPin,
+    RotateCcw,
+    XCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
-import { getUserById, getUserCommission, getUserSales, getPendingSellers, getSalesUnderReview } from '../../api/admin.api';
+import { getUserById, getUserCommission, getUserSales, getPendingSellers, getSalesUnderReview, reviewSale } from '../../api/admin.api';
 import AdminFooter from '../components/AdminFooter';
 import SaleDetailModal from '../../components/SaleDetailModal';
+import ReturnModal from '../components/ReturnModal';
 import AdminSidebar from '../components/AdminSidebar';
-import NotificationBell from '../../components/NotificationBell';
+import AdminTopbar from '../components/AdminTopbar';
 
 function SellerDetails() {
     const { id } = useParams();
     const { user, logout } = useAuth();
-    const { isDarkMode, toggleDarkMode } = useDarkMode();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -48,6 +48,22 @@ function SellerDetails() {
 
     // Sale detail modal
     const [selectedSale, setSelectedSale] = useState(null);
+
+    // Return modal
+    const [returnModalSale, setReturnModalSale] = useState(null);
+
+    // Review state
+    const [isApproving, setIsApproving] = useState(null);
+    const [showRejectForm, setShowRejectForm] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState('');
+    const [notification, setNotification] = useState(null);
+
+    // Auto-dismiss notification
+    useEffect(() => {
+        if (!notification) return;
+        const timer = setTimeout(() => setNotification(null), 4000);
+        return () => clearTimeout(timer);
+    }, [notification]);
 
     // UI State
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -131,6 +147,49 @@ function SellerDetails() {
         navigate('/login');
     };
 
+    const handleReturnSuccess = () => {
+        setReturnModalSale(null);
+        loadSales();
+        loadCommission();
+    };
+
+    const handleApprove = async (sale) => {
+        setIsApproving(sale.id);
+        try {
+            await reviewSale(sale.id, true);
+            setNotification({ type: 'success', message: `Venta #${sale.orderNumber || sale.id} aprobada exitosamente.` });
+            setSelectedSale(null);
+            loadSales();
+            loadCommission();
+        } catch (err) {
+            console.error('Error approving sale:', err);
+            setNotification({ type: 'error', message: 'Error al aprobar la venta.' });
+        } finally {
+            setIsApproving(null);
+        }
+    };
+
+    const handleReject = async (sale) => {
+        if (!rejectionReason.trim()) {
+            setNotification({ type: 'error', message: 'Debes ingresar un motivo de rechazo.' });
+            return;
+        }
+        setIsApproving(sale.id);
+        try {
+            await reviewSale(sale.id, false, rejectionReason);
+            setNotification({ type: 'success', message: `Venta #${sale.orderNumber || sale.id} rechazada.` });
+            setSelectedSale(null);
+            setRejectionReason('');
+            setShowRejectForm(false);
+            loadSales();
+        } catch (err) {
+            console.error('Error rejecting sale:', err);
+            setNotification({ type: 'error', message: 'Error al rechazar la venta.' });
+        } finally {
+            setIsApproving(null);
+        }
+    };
+
     const getStatusColor = (status) => {
         switch (status?.toUpperCase()) {
             case 'APPROVED':
@@ -146,6 +205,8 @@ function SellerDetails() {
             case 'REJECTED':
             case 'RECHAZADA':
                 return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+            case 'RETURNED':
+                return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400';
             default:
                 return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
         }
@@ -166,6 +227,8 @@ function SellerDetails() {
             case 'REJECTED':
             case 'RECHAZADA':
                 return 'Rechazada';
+            case 'RETURNED':
+                return 'Devuelta';
             default:
                 return status || 'Pendiente';
         }
@@ -223,31 +286,11 @@ function SellerDetails() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-4 sm:px-8">
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        {!isSidebarOpen && (
-                            <button
-                                onClick={() => setIsSidebarOpen(true)}
-                                className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        )}
-                        <Link to="/admin/sellers" className="hover:text-primary transition-colors">Vendedores</Link>
-                        <ChevronRight className="w-4 h-4" />
-                        <span className="font-medium text-slate-900 dark:text-white">{seller?.fullName}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <NotificationBell />
-                        <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
-                        <button
-                            onClick={toggleDarkMode}
-                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                    </div>
-                </header>
+                <AdminTopbar
+                    isSidebarOpen={isSidebarOpen}
+                    onSidebarOpen={() => setIsSidebarOpen(true)}
+                    title="Ventas del Vendedor"
+                />
 
                 {/* Content */}
                 <div className="p-4 sm:p-8 space-y-6 flex-1 overflow-y-auto">
@@ -255,13 +298,24 @@ function SellerDetails() {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-border-light dark:border-border-dark p-6">
                             <div className="flex items-start gap-4">
-                                <div className="w-16 h-16 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <span className="text-xl font-bold text-white">
-                                        {seller?.fullName?.charAt(0)?.toUpperCase() || 'V'}
-                                    </span>
-                                </div>
+                                {seller?.profilePhotoUrl ? (
+                                    <img
+                                        src={seller.profilePhotoUrl}
+                                        alt={seller.fullName}
+                                        className="w-16 h-16 rounded-full object-cover flex-shrink-0"
+                                    />
+                                ) : (
+                                    <div className="w-16 h-16 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <span className="text-xl font-bold text-white">
+                                            {seller?.fullName?.charAt(0)?.toUpperCase() || 'V'}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex-1">
                                     <h1 className="text-xl font-bold text-slate-900 dark:text-white">{seller?.fullName}</h1>
+                                    {seller?.nickname && (
+                                        <p className="text-sm text-primary font-medium">@{seller.nickname}</p>
+                                    )}
                                     <div className="mt-2 space-y-1">
                                         <p className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm">
                                             <Mail className="w-4 h-4" />
@@ -271,14 +325,26 @@ function SellerDetails() {
                                             <Phone className="w-4 h-4" />
                                             {seller?.phoneNumber || 'Sin teléfono'}
                                         </p>
+                                        {seller?.city && (
+                                            <p className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm">
+                                                <MapPin className="w-4 h-4" />
+                                                {seller.city}
+                                            </p>
+                                        )}
                                     </div>
-                                    <div className="mt-3">
+                                    <div className="mt-3 flex items-center gap-2 flex-wrap">
                                         <span className={`text-xs px-2 py-1 rounded-full ${seller?.pendingApproval
                                             ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                                             : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                             }`}>
                                             {seller?.pendingApproval ? 'Pendiente de Aprobación' : 'Aprobado'}
                                         </span>
+                                        <button
+                                            onClick={() => navigate(`/admin/profile/${seller?.id}`)}
+                                            className="text-xs text-primary hover:text-primary-hover font-medium hover:underline transition-colors"
+                                        >
+                                            Ver perfil completo
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -291,10 +357,10 @@ function SellerDetails() {
                                 <span className="text-sm font-medium opacity-90">Comisión del Mes</span>
                             </div>
                             <p className="text-3xl font-bold">
-                                {formatCurrency(commission?.totalCommission || commission?.amount || 0)}
+                                {formatCurrency(commission ?? 0)}
                             </p>
                             <p className="text-sm opacity-75 mt-1">
-                                {commission?.month || new Date().toLocaleDateString('es-EC', { month: 'long', year: 'numeric' })}
+                                {new Date().toLocaleDateString('es-EC', { month: 'long', year: 'numeric' })}
                             </p>
                         </div>
                     </div>
@@ -333,7 +399,7 @@ function SellerDetails() {
                                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Monto</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Estado</th>
-                                            <th className="px-6 py-3"></th>
+                                            <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border-light dark:divide-border-dark">
@@ -366,7 +432,47 @@ function SellerDetails() {
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <Eye className="w-5 h-5 text-slate-400" />
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); openSaleDetail(sale.id); }}
+                                                            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                                            title="Ver detalle"
+                                                        >
+                                                            <Eye className="w-4 h-4" />
+                                                        </button>
+                                                        {sale.status === 'UNDER_REVIEW' && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleApprove(sale); }}
+                                                                disabled={isApproving === sale.id}
+                                                                className="p-1.5 text-green-500 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50"
+                                                                title="Aprobar venta"
+                                                            >
+                                                                <CheckCircle className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {sale.status === 'UNDER_REVIEW' && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedSale(sale);
+                                                                    setShowRejectForm(true);
+                                                                }}
+                                                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                                title="Rechazar venta"
+                                                            >
+                                                                <XCircle className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {sale.status === 'APPROVED' && !sale.commissionSettled && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setReturnModalSale(sale); }}
+                                                                className="p-1.5 text-orange-500 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                                                                title="Procesar devolución"
+                                                            >
+                                                                <RotateCcw className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -436,8 +542,90 @@ function SellerDetails() {
             {/* Sale Detail Modal */}
             <SaleDetailModal
                 sale={selectedSale}
-                onClose={() => setSelectedSale(null)}
-            />
+                onClose={() => { setSelectedSale(null); setShowRejectForm(false); setRejectionReason(''); }}
+            >
+                {selectedSale && selectedSale.status === 'UNDER_REVIEW' && (
+                    <div className="space-y-3">
+                        {showRejectForm ? (
+                            <div className="space-y-3">
+                                <textarea
+                                    value={rejectionReason}
+                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                    placeholder="Motivo del rechazo..."
+                                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary/50 focus:border-primary resize-none"
+                                    rows={3}
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => { setShowRejectForm(false); setRejectionReason(''); }}
+                                        className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={() => handleReject(selectedSale)}
+                                        disabled={isApproving === selectedSale.id}
+                                        className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                        {isApproving === selectedSale.id ? 'Rechazando...' : 'Confirmar Rechazo'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowRejectForm(true)}
+                                    className="flex-1 px-4 py-2.5 text-sm font-medium text-red-600 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <XCircle className="w-4 h-4" />
+                                    Rechazar
+                                </button>
+                                <button
+                                    onClick={() => handleApprove(selectedSale)}
+                                    disabled={isApproving === selectedSale.id}
+                                    className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    <CheckCircle className="w-4 h-4" />
+                                    {isApproving === selectedSale.id ? 'Aprobando...' : 'Aprobar'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {selectedSale && selectedSale.status === 'APPROVED' && !selectedSale.commissionSettled && (
+                    <button
+                        onClick={() => { setSelectedSale(null); setReturnModalSale(selectedSale); }}
+                        className="w-full px-4 py-2.5 text-sm font-medium text-orange-600 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                        <RotateCcw className="w-4 h-4" />
+                        Procesar Devolución
+                    </button>
+                )}
+            </SaleDetailModal>
+
+            {/* Return Modal */}
+            {returnModalSale && (
+                <ReturnModal
+                    sale={returnModalSale}
+                    onClose={() => setReturnModalSale(null)}
+                    onSuccess={handleReturnSuccess}
+                />
+            )}
+
+            {/* Notification Toast */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[70] px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 ${
+                    notification.type === 'success'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-red-600 text-white'
+                }`}>
+                    {notification.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    {notification.message}
+                    <button onClick={() => setNotification(null)} className="ml-2 hover:opacity-80">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

@@ -1,24 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import {
     FileText, ChevronRight, DollarSign, LogOut, ShoppingBag,
-    Percent, X, Eye, Calendar, Search, Filter, TrendingUp, Package, Moon, Sun,
+    Percent, X, Eye, Calendar, Search, Filter, TrendingUp, Package,
     PlusCircle, Hourglass, FileSearch, CheckCircle, XCircle, Info, Upload, ArrowRight,
-    ExternalLink, ShieldCheck, Mail, Phone, Loader2, ImageIcon, Camera, Clock, AlertCircle, Trash2, Tv
+    ExternalLink, ShieldCheck, Mail, Phone, Loader2, ImageIcon, Camera, Clock, AlertCircle, Trash2, Tv, AlertTriangle
 } from 'lucide-react';
-import { getMySales, getMyCommission, getMyProfile, getSaleDetails, registerPaymentWithReceipt, uploadReport, getCommissionStats, deleteSale, deletePayment } from '../../api/reports.api';
+import { getMySales, getMyCommission, getMyProfile, getSaleDetails, registerPaymentWithReceipt, uploadReport, getCommissionStats, deleteSale, deletePayment, checkCanCreateSale } from '../../api/reports.api';
 import SellerSidebar from '../components/SellerSidebar';
 import SellerFooter from '../components/SellerFooter';
 import SalesUploadModal from '../components/SalesUploadModal';
 import TvSaleModal from '../components/TvSaleModal';
 import PendingSalesPanel from '../components/PendingSalesPanel';
-import NotificationBell from '../../components/NotificationBell';
+import SellerTopbar from '../components/SellerTopbar';
 
 function SellerSales() {
     const { user, logout } = useAuth();
-    const { isDarkMode, toggleDarkMode } = useDarkMode();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -86,12 +84,17 @@ function SellerSales() {
     const [saleDetails, setSaleDetails] = useState(null);
     const [loadingSaleDetails, setLoadingSaleDetails] = useState(false);
 
+    // Block state: seller cannot create new sales if has overdue unpaid sales (>24h)
+    const [canCreateSale, setCanCreateSale] = useState(true);
+    const [overdueCount, setOverdueCount] = useState(0);
+
     useEffect(() => {
         const userId = user?.userId || user?.id;
         if (userId) {
             loadUserProfile();
             loadSales();
             loadCommission();
+            loadCanCreateStatus();
         }
     }, [currentPage, user?.id]);
 
@@ -172,6 +175,18 @@ function SellerSales() {
             }
         } catch (err) {
             console.error('Error loading commission:', err);
+        }
+    };
+
+    const loadCanCreateStatus = async () => {
+        const userId = user?.userId || user?.id;
+        if (!userId) return;
+        try {
+            const response = await checkCanCreateSale(userId);
+            setCanCreateSale(response.data.canCreate);
+            setOverdueCount(response.data.overdueCount || 0);
+        } catch (err) {
+            console.error('Error checking create status:', err);
         }
     };
 
@@ -342,6 +357,7 @@ function SellerSales() {
 
         try {
             // Register payment with receipt in a single call
+            const uploadedForSaleId = saleForReceipt.id;
             await registerPaymentWithReceipt(
                 saleForReceipt.id,
                 amountToRegister,
@@ -353,6 +369,10 @@ function SellerSales() {
             closeReceiptModal();
             loadSales();
             loadCommission();
+            loadCanCreateStatus();
+            if (selectedSale && selectedSale.id === uploadedForSaleId) {
+                loadSaleDetails(uploadedForSaleId);
+            }
         } catch (error) {
             console.error('Receipt upload error:', error);
             if (error.response?.status === 400) {
@@ -459,6 +479,7 @@ function SellerSales() {
             // Reload sales list and commission
             loadSales();
             loadCommission();
+            loadCanCreateStatus();
 
             closeDeletePaymentModal();
         } catch (err) {
@@ -523,6 +544,14 @@ function SellerSales() {
 
     const userCommission = commissionPercentage;
 
+    // A sale is overdue when: PENDING + UNPAID + created more than 24h ago
+    const isOverdueSale = (sale) => {
+        if (sale.status?.toUpperCase() !== 'PENDING') return false;
+        if (sale.paymentStatus === 'PAID' || sale.paymentStatus === 'PARTIALLY_PAID') return false;
+        const createdAt = new Date(sale.createdAt || sale.orderDate);
+        return (Date.now() - createdAt.getTime()) > 24 * 60 * 60 * 1000;
+    };
+
     return (
         <div className="bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100 font-sans min-h-screen flex flex-col transition-colors duration-200">
             <style>{`
@@ -584,40 +613,11 @@ function SellerSales() {
                 />
 
                 <main className={`flex-1 h-full flex flex-col overflow-y-auto transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
-                    <header className="bg-white dark:bg-surface-dark border-b border-gray-200 dark:border-border-dark h-16 flex items-center justify-between px-6 sticky top-0 z-20 shadow-sm transition-colors duration-200">
-                        <div className="flex items-center gap-2">
-                            {!isSidebarOpen && (
-                                <button
-                                    onClick={() => setIsSidebarOpen(true)}
-                                    className="hidden md:flex mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500 dark:text-slate-400"
-                                    title="Mostrar menú"
-                                >
-                                    <ChevronRight className="w-5 h-5" />
-                                </button>
-                            )}
-                            <h1 className="text-xl font-semibold text-gray-800 dark:text-white">Mis Ventas</h1>
-                        </div>
-                        <div className="flex items-center gap-4 md:gap-6">
-                            <div className="hidden md:flex items-center bg-gray-50 dark:bg-slate-800 px-4 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 transition-colors">
-                                <Percent className="w-4 h-4 text-primary mr-2" />
-                                <span className="text-sm font-medium text-gray-600 dark:text-slate-300">
-                                    Mi Comisión: <span className="text-gray-900 dark:text-white font-bold ml-1">{userCommission}%</span>
-                                </span>
-                            </div>
-
-                            <div className="h-6 w-[1px] bg-gray-200 dark:bg-slate-700 hidden md:block"></div>
-
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={toggleDarkMode}
-                                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 transition-colors"
-                                >
-                                    {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                                </button>
-                                <NotificationBell />
-                            </div>
-                        </div>
-                    </header>
+                    <SellerTopbar
+                        isSidebarOpen={isSidebarOpen}
+                        onSidebarOpen={() => setIsSidebarOpen(true)}
+                        title="Mis Ventas"
+                    />
 
                     <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
                         <div className="mb-8">
@@ -628,14 +628,16 @@ function SellerSales() {
                                 </div>
                                 <div className="relative" ref={newSaleMenuRef}>
                                     <button
-                                        onClick={() => setShowNewSaleMenu(!showNewSaleMenu)}
-                                        className="bg-mayorista-red hover:bg-red-700 text-white font-semibold py-2.5 px-5 rounded-lg shadow-sm transition-all flex items-center gap-2 active:scale-95"
+                                        onClick={() => canCreateSale && setShowNewSaleMenu(!showNewSaleMenu)}
+                                        disabled={!canCreateSale}
+                                        title={!canCreateSale ? `Tienes ${overdueCount} venta(s) con más de 24h sin comprobante` : 'Nueva Venta'}
+                                        className={`font-semibold py-2.5 px-5 rounded-lg shadow-sm transition-all flex items-center gap-2 ${canCreateSale ? 'bg-mayorista-red hover:bg-red-700 text-white active:scale-95' : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
                                     >
                                         <PlusCircle className="w-5 h-5" />
                                         Nueva Venta
-                                        <ChevronRight className={`w-4 h-4 transition-transform ${showNewSaleMenu ? 'rotate-90' : ''}`} />
+                                        {canCreateSale && <ChevronRight className={`w-4 h-4 transition-transform ${showNewSaleMenu ? 'rotate-90' : ''}`} />}
                                     </button>
-                                    {showNewSaleMenu && (
+                                    {canCreateSale && showNewSaleMenu && (
                                         <>
                                             <div className="fixed inset-0 z-40" onClick={() => setShowNewSaleMenu(false)} />
                                             <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-surface-dark rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 z-50 overflow-hidden">
@@ -671,6 +673,22 @@ function SellerSales() {
                                     )}
                                 </div>
                             </div>
+
+                            {/* Blocked banner */}
+                            {!canCreateSale && (
+                                <div className="mt-4 flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl p-4">
+                                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                            Registro de ventas bloqueado
+                                        </p>
+                                        <p className="text-sm text-amber-700 dark:text-amber-400 mt-0.5">
+                                            Tienes <strong>{overdueCount}</strong> venta{overdueCount > 1 ? 's' : ''} con más de 24 horas sin comprobante de pago.
+                                            Sube los comprobantes pendientes para habilitar el registro de nuevas ventas.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -876,8 +894,9 @@ function SellerSales() {
                                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-surface-dark">
                                             {filteredSales.map((sale) => {
                                                 const progress = getProgressInfo(sale.status);
+                                                const overdue = isOverdueSale(sale);
                                                 return (
-                                                    <tr key={sale.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
+                                                    <tr key={sale.id} className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group ${overdue ? 'border-l-4 border-l-amber-400' : ''}`}>
                                                         <td className="px-6 py-4 whitespace-nowrap">
                                                             <div className="flex flex-col">
                                                                 <div className="flex items-center gap-1.5">
@@ -887,6 +906,11 @@ function SellerSales() {
                                                                         </span>
                                                                     )}
                                                                     <span className="text-sm font-bold text-gray-900 dark:text-white">#{sale.orderNumber || sale.id}</span>
+                                                                    {overdue && (
+                                                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-[10px] font-bold rounded" title="Comprobante pendiente por más de 24h">
+                                                                            <AlertTriangle className="w-3 h-3" /> +24h
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 <div className="text-xs text-gray-500 dark:text-gray-400">{sale.customerName || 'Cliente General'}</div>
                                                             </div>
@@ -918,11 +942,11 @@ function SellerSales() {
                                                                 {(sale.status?.toUpperCase() === 'PENDING' || sale.status?.toUpperCase() === 'REJECTED') && sale.paymentStatus !== 'PAID' && (
                                                                     <button
                                                                         onClick={(e) => openReceiptModal(sale, e)}
-                                                                        className="flex items-center gap-2 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-full transition-colors shadow-sm"
-                                                                        title="Subir comprobante de pago"
+                                                                        className={`flex items-center gap-2 px-4 py-1.5 text-white text-sm font-bold rounded-full transition-colors shadow-sm ${overdue ? 'bg-amber-500 hover:bg-amber-600 animate-pulse' : 'bg-red-600 hover:bg-red-700'}`}
+                                                                        title={overdue ? '¡Comprobante pendiente por más de 24h!' : 'Subir comprobante de pago'}
                                                                     >
                                                                         <Upload className="w-4 h-4" />
-                                                                        Subir Comprobante
+                                                                        {overdue ? '¡Subir Urgente!' : 'Subir Comprobante'}
                                                                     </button>
                                                                 )}
                                                                 {canDeleteSale(sale) && (

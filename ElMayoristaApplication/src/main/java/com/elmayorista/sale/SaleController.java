@@ -1,21 +1,19 @@
 package com.elmayorista.sale;
 
 import com.elmayorista.config.Mapper;
+import com.elmayorista.service.FileStorageService;
 import com.elmayorista.service.PdfExtractionService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import jakarta.validation.Valid;
 import java.io.IOException;
-import java.util.UUID;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/sales")
@@ -25,6 +23,7 @@ public class SaleController {
     private final SaleService saleService;
     private final UserService userService;
     private final PdfExtractionService pdfExtractionService;
+    private final FileStorageService fileStorageService;
     private final Mapper mapper;
 
     /**
@@ -48,11 +47,15 @@ public class SaleController {
             Authentication authentication) throws IOException {
         User seller = getUserFromAuth(authentication);
 
-        // Extraer datos
+        // Extraer datos del PDF
         Sale sale = pdfExtractionService.extractSaleData(file);
         sale.setSeller(seller);
 
-        // Guardar venta preliminar
+        // Guardar el PDF original en R2 para que pueda visualizarse como comprobante
+        String pdfUrl = fileStorageService.uploadFile(file, "receipts");
+        sale.setReportPdfUrl(pdfUrl);
+
+        // Guardar venta
         Sale createdSale = saleService.createSale(sale);
         return ResponseEntity.ok(mapper.toSaleDTO(createdSale));
     }
@@ -68,11 +71,34 @@ public class SaleController {
         return ResponseEntity.ok(mapper.toSaleDTO(createdSale));
     }
 
+    /**
+     * Ranking de los mejores vendedores por ventas aprobadas. Accesible por ADMIN y SELLER.
+     */
+    @GetMapping("/ranking")
+    public ResponseEntity<List<SellerRankingDTO>> getSellerRanking(
+            @RequestParam(defaultValue = "10") int limit) {
+        return ResponseEntity.ok(saleService.getTopSellers(Math.min(limit, 50)));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<SaleDTO> getSaleById(@PathVariable Long id) {
-        Sale sale = saleService.getSaleById(id);
-        return ResponseEntity.ok(mapper.toSaleDTO(sale));
+        return ResponseEntity.ok(saleService.getSaleDTOById(id));
     }
+
+    /**
+     * Procesa la devolución o cambio de una venta (solo ADMIN).
+     * La venta debe estar APPROVED y no estar liquidada (commissionSettled=false).
+     */
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('ADMIN')")
+    @PostMapping("/{id}/return")
+    public ResponseEntity<SaleDTO> returnSale(
+            @PathVariable Long id,
+            @RequestBody ReturnRequest request) {
+        Sale returned = saleService.processReturn(id, request.returnType(), request.reason());
+        return ResponseEntity.ok(mapper.toSaleDTO(returned));
+    }
+
+    public record ReturnRequest(ReturnType returnType, String reason) {}
 
     /**
      * Elimina una venta (solo si el vendedor es el dueño y el estado lo permite)
@@ -85,7 +111,6 @@ public class SaleController {
     }
 
     private User getUserFromAuth(Authentication authentication) {
-        // Asumiendo que el principal es el email o UserDetails
         String email = authentication.getName();
         return userService.getUserByEmail(email)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Usuario autenticado no encontrado"));

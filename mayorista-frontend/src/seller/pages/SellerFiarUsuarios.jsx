@@ -3,11 +3,13 @@ import { useAuth } from '../../context/AuthContext';
 import { useDarkMode } from '../../context/DarkModeContext';
 import {
     Moon, Sun, ChevronRight, Users, UserPlus, CreditCard, Plus,
-    CheckCircle, Clock, XCircle, DollarSign, Package
+    CheckCircle, Clock, XCircle, DollarSign, Package,
+    Search, AlertTriangle, MessageCircle, Loader2, ShieldCheck, Globe
 } from 'lucide-react';
 import SellerSidebar from '../components/SellerSidebar';
 import SellerFooter from '../components/SellerFooter';
 import { registerCustomer, getApprovedCustomers, createCustomerFiado, getMyCustomerFiados } from '../../api/customer.api';
+import { verifyCedula, verifyRuc, verifyWhatsapp } from '../../api/verification.api';
 import NotificationBell from '../../components/NotificationBell';
 
 function SellerFiarUsuarios() {
@@ -18,10 +20,20 @@ function SellerFiarUsuarios() {
     const [showLogoutModal, setShowLogoutModal] = useState(false);
 
     // Register customer state
-    const [customerForm, setCustomerForm] = useState({ fullName: '', idNumber: '', phoneNumber: '' });
+    const [customerForm, setCustomerForm] = useState({ fullName: '', idNumber: '', phoneNumber: '', idType: '' });
     const [submittingCustomer, setSubmittingCustomer] = useState(false);
     const [customerSuccess, setCustomerSuccess] = useState('');
     const [customerError, setCustomerError] = useState('');
+
+    // ID verification state
+    const [verifying, setVerifying] = useState(false);
+    const [verificationData, setVerificationData] = useState(null); // { valid, type }
+    const [verificationError, setVerificationError] = useState('');
+    const [isForeign, setIsForeign] = useState(false);
+
+    // WhatsApp verification state
+    const [whatsappChecking, setWhatsappChecking] = useState(false);
+    const [whatsappStatus, setWhatsappStatus] = useState(null); // 'available' | 'unavailable'
 
     // Approved customers for select
     const [approvedCustomers, setApprovedCustomers] = useState([]);
@@ -66,6 +78,70 @@ function SellerFiarUsuarios() {
         }
     };
 
+    const toTitleCase = (str) =>
+        str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+    const handleVerifyId = async () => {
+        const id = customerForm.idNumber.trim();
+        if (!id) return;
+        setVerifying(true);
+        setVerificationError('');
+        setVerificationData(null);
+        setIsForeign(false);
+
+        try {
+            const res = id.length === 13 ? await verifyRuc(id) : await verifyCedula(id);
+            const data = res.data;
+            if (data.valid) {
+                setVerificationData(data);
+                setCustomerForm(prev => ({ ...prev, idType: data.type }));
+            } else {
+                setVerificationError('No es un documento ecuatoriano válido.');
+            }
+        } catch {
+            setVerificationError('Error al verificar el documento.');
+        } finally {
+            setVerifying(false);
+        }
+    };
+
+    const handleMarkForeign = (docType) => {
+        setIsForeign(true);
+        setVerificationData(null);
+        setVerificationError('');
+        setCustomerForm(prev => ({ ...prev, idType: docType, idNumber: '' }));
+    };
+
+    const handleCancelForeign = () => {
+        setIsForeign(false);
+        setCustomerForm(prev => ({ ...prev, idType: '', idNumber: '' }));
+        setVerificationData(null);
+        setVerificationError('');
+    };
+
+    const handleVerifyWhatsapp = async () => {
+        let phone = customerForm.phoneNumber.trim();
+        if (!phone) return;
+
+        // Convertir a E.164 Ecuador: 0991234567 → 593991234567
+        if (phone.startsWith('0')) {
+            phone = '593' + phone.slice(1);
+        } else if (!phone.startsWith('593')) {
+            phone = '593' + phone;
+        }
+
+        setWhatsappChecking(true);
+        setWhatsappStatus(null);
+        try {
+            const res = await verifyWhatsapp(phone);
+            setWhatsappStatus(res.data.status === 'available' ? 'available' : 'unavailable');
+        } catch {
+            setWhatsappStatus('unavailable');
+        } finally {
+            setWhatsappChecking(false);
+        }
+    };
+
     const handleRegisterCustomer = async (e) => {
         e.preventDefault();
         if (!customerForm.fullName.trim()) return;
@@ -76,9 +152,14 @@ function SellerFiarUsuarios() {
             await registerCustomer({
                 fullName: customerForm.fullName.trim(),
                 idNumber: customerForm.idNumber.trim() || null,
+                idType: customerForm.idType || null,
                 phoneNumber: customerForm.phoneNumber.trim() || null
             });
-            setCustomerForm({ fullName: '', idNumber: '', phoneNumber: '' });
+            setCustomerForm({ fullName: '', idNumber: '', phoneNumber: '', idType: '' });
+            setVerificationData(null);
+            setVerificationError('');
+            setIsForeign(false);
+            setWhatsappStatus(null);
             setCustomerSuccess('Cliente registrado exitosamente. Pendiente de aprobacion del administrador.');
             setTimeout(() => setCustomerSuccess(''), 5000);
         } catch (error) {
@@ -432,7 +513,137 @@ function SellerFiarUsuarios() {
                                         El cliente debe ser aprobado por el administrador antes de poder fiarle.
                                     </p>
 
-                                    <form onSubmit={handleRegisterCustomer} className="space-y-4">
+                                    <form onSubmit={handleRegisterCustomer} className="space-y-5">
+
+                                        {/* Cédula / RUC / Documento extranjero */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                                {isForeign
+                                                    ? customerForm.idType === 'PASAPORTE' ? 'Número de Pasaporte' : 'Número de Documento'
+                                                    : 'Cédula / RUC'}
+                                            </label>
+
+                                            {/* Selector de tipo de documento extranjero */}
+                                            {isForeign && (
+                                                <div className="flex gap-2 mb-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCustomerForm(prev => ({ ...prev, idType: 'PASAPORTE' }))}
+                                                        className={`flex-1 py-1.5 text-sm font-medium rounded-lg border transition-colors ${customerForm.idType === 'PASAPORTE'
+                                                            ? 'bg-blue-600 text-white border-blue-600'
+                                                            : 'border-gray-300 dark:border-gray-600 text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                                                    >
+                                                        Pasaporte
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCustomerForm(prev => ({ ...prev, idType: 'ID_EXTRANJERO' }))}
+                                                        className={`flex-1 py-1.5 text-sm font-medium rounded-lg border transition-colors ${customerForm.idType === 'ID_EXTRANJERO'
+                                                            ? 'bg-blue-600 text-white border-blue-600'
+                                                            : 'border-gray-300 dark:border-gray-600 text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
+                                                    >
+                                                        Cédula Extranjera
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleCancelForeign}
+                                                        className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border border-gray-300 dark:border-gray-600 rounded-lg transition-colors"
+                                                        title="Volver a cédula ecuatoriana"
+                                                    >
+                                                        <XCircle className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={customerForm.idNumber}
+                                                    onChange={(e) => {
+                                                        const val = isForeign
+                                                            ? e.target.value.toUpperCase().slice(0, 20)
+                                                            : e.target.value.replace(/\D/g, '').slice(0, 13);
+                                                        setCustomerForm(prev => ({ ...prev, idNumber: val }));
+                                                        if (!isForeign) {
+                                                            setVerificationData(null);
+                                                            setVerificationError('');
+                                                        }
+                                                    }}
+                                                    placeholder={isForeign ? 'Ej: AB123456 o PAS-001' : '0912345678 o 0912345678001'}
+                                                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                                             bg-white dark:bg-gray-700 text-slate-900 dark:text-white
+                                                             focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                                                    maxLength={isForeign ? 20 : 13}
+                                                />
+                                                {!isForeign && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleVerifyId}
+                                                        disabled={verifying || (customerForm.idNumber.length !== 10 && customerForm.idNumber.length !== 13)}
+                                                        className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white
+                                                                 font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                                                    >
+                                                        {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                                                        {verifying ? 'Verificando...' : 'Verificar'}
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Resultado válido */}
+                                            {verificationData?.valid && (
+                                                <div className="mt-2 flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700">
+                                                    <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+                                                    <span className="font-medium">
+                                                        {verificationData.type === 'CEDULA' ? 'Cédula ecuatoriana válida' : 'RUC ecuatoriano válido'}
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* Resultado inválido con opción extranjero */}
+                                            {verificationError && !isForeign && (
+                                                <div className="mt-2 space-y-2">
+                                                    <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                                                        <XCircle className="w-4 h-4 flex-shrink-0" />
+                                                        {verificationError}
+                                                    </div>
+                                                    <div className="flex items-start gap-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                                        <Globe className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                                        <div className="flex-1">
+                                                            <p className="text-sm text-blue-800 dark:text-blue-300 font-medium">¿El cliente es extranjero?</p>
+                                                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Selecciona el tipo de documento para continuar</p>
+                                                            <div className="flex gap-2 mt-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleMarkForeign('PASAPORTE')}
+                                                                    className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                                                                >
+                                                                    Pasaporte
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleMarkForeign('ID_EXTRANJERO')}
+                                                                    className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                                                                >
+                                                                    Cédula Extranjera
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Badge de extranjero activo */}
+                                            {isForeign && (
+                                                <div className="mt-2 flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
+                                                    <Globe className="w-4 h-4 flex-shrink-0" />
+                                                    <span className="font-medium">
+                                                        Cliente extranjero — {customerForm.idType === 'PASAPORTE' ? 'Pasaporte' : 'Cédula Extranjera'}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Nombre completo (auto-llenado, siempre editable) */}
                                         <div>
                                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                                 Nombre Completo *
@@ -441,7 +652,7 @@ function SellerFiarUsuarios() {
                                                 type="text"
                                                 value={customerForm.fullName}
                                                 onChange={(e) => setCustomerForm({ ...customerForm, fullName: e.target.value })}
-                                                placeholder="Ej: Juan Perez"
+                                                placeholder="Ej: Juan Pérez"
                                                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
                                                          bg-white dark:bg-gray-700 text-slate-900 dark:text-white
                                                          focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
@@ -450,41 +661,58 @@ function SellerFiarUsuarios() {
                                             />
                                         </div>
 
+                                        {/* Teléfono + verificación WhatsApp opcional */}
                                         <div>
                                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                                Cedula / Identificacion
+                                                Teléfono
                                             </label>
-                                            <input
-                                                type="text"
-                                                value={customerForm.idNumber}
-                                                onChange={(e) => setCustomerForm({ ...customerForm, idNumber: e.target.value })}
-                                                placeholder="Ej: 0912345678"
-                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
-                                                         bg-white dark:bg-gray-700 text-slate-900 dark:text-white
-                                                         focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                                                maxLength="20"
-                                            />
-                                        </div>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={customerForm.phoneNumber}
+                                                    onChange={(e) => {
+                                                        setCustomerForm({ ...customerForm, phoneNumber: e.target.value });
+                                                        setWhatsappStatus(null);
+                                                    }}
+                                                    placeholder="Ej: 0991234567"
+                                                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
+                                                             bg-white dark:bg-gray-700 text-slate-900 dark:text-white
+                                                             focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                                                    maxLength="20"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleVerifyWhatsapp}
+                                                    disabled={!customerForm.phoneNumber.trim() || whatsappChecking}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white
+                                                             font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                                                    title="Verificar WhatsApp (opcional)"
+                                                >
+                                                    {whatsappChecking
+                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                        : <MessageCircle className="w-4 h-4" />}
+                                                    {whatsappChecking ? 'Verificando...' : 'WhatsApp'}
+                                                </button>
+                                            </div>
 
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                                Telefono
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={customerForm.phoneNumber}
-                                                onChange={(e) => setCustomerForm({ ...customerForm, phoneNumber: e.target.value })}
-                                                placeholder="Ej: 0991234567"
-                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg
-                                                         bg-white dark:bg-gray-700 text-slate-900 dark:text-white
-                                                         focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                                                maxLength="20"
-                                            />
+                                            {/* Resultado WhatsApp */}
+                                            {whatsappStatus && (
+                                                <div className={`mt-2 flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
+                                                    whatsappStatus === 'available'
+                                                        ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700'
+                                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                                                }`}>
+                                                    <MessageCircle className="w-4 h-4 flex-shrink-0" />
+                                                    {whatsappStatus === 'available'
+                                                        ? 'Tiene WhatsApp activo'
+                                                        : 'No tiene WhatsApp registrado en este número'}
+                                                </div>
+                                            )}
                                         </div>
 
                                         <button
                                             type="submit"
-                                            disabled={submittingCustomer}
+                                            disabled={submittingCustomer || (!verificationData?.valid && !isForeign)}
                                             className="w-full bg-primary hover:bg-primary-hover text-white font-semibold py-3 px-6
                                                      rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed
                                                      flex items-center justify-center gap-2"

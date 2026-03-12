@@ -19,5 +19,10 @@ public class UserDTO {
     private boolean enabled;
     private boolean pendingApproval;
     private BigDecimal commissionPercentage;
+    private String profilePhotoUrl;
+    private String coverPhotoUrl;
+    private String bio;
+    private String city;
+    private String nickname;
     private LocalDateTime createdAt;
 }

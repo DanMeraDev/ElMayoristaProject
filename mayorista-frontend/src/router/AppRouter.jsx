@@ -10,14 +10,20 @@ import SalesReview from '../admin/pages/SalesReview';
 import AdminSalesHistory from '../admin/pages/AdminSalesHistory';
 import AdminReports from '../admin/pages/AdminReports';
 import AdminSettings from '../admin/pages/AdminSettings';
+import AdminNotificationsHistory from '../admin/pages/AdminNotificationsHistory';
+import AdminRanking from '../admin/pages/AdminRanking';
+import ProfileView from '../pages/ProfileView';
 import SellerHome from '../seller/pages/SellerHome';
+import SellerProfile from '../seller/pages/SellerProfile';
+import SellerNotificationsHistory from '../seller/pages/SellerNotificationsHistory';
+import SellerRanking from '../seller/pages/SellerRanking';
 import SellerSales from '../seller/pages/SellerSales';
 import SellerSupport from '../seller/pages/SellerSupport';
 import SellerMisFiados from '../seller/pages/SellerMisFiados';
 import SellerFiarUsuarios from '../seller/pages/SellerFiarUsuarios';
 import PendingApproval from '../seller/pages/PendingApproval';
 
-const ProtectedRoute = ({ children, allowedRoles }) => {
+const ProtectedRoute = ({ children, allowedRoles, requiredPermission }) => {
     const { user, isAuthenticated, isLoading } = useAuth();
     const location = useLocation();
 
@@ -51,6 +57,11 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
         return <div>No tienes permiso para acceder a esta página</div>;
     }
 
+    // Verificar permiso específico (canCreditSelf, canCreditCustomers, etc.)
+    if (requiredPermission && !user[requiredPermission]) {
+        return <Navigate to="/seller/home" replace />;
+    }
+
     return children;
 };
 
@@ -75,6 +86,9 @@ export const AppRouter = () => {
                         <Route path="sales-history" element={<AdminSalesHistory />} />
                         <Route path="reports" element={<AdminReports />} />
                         <Route path="settings" element={<AdminSettings />} />
+                        <Route path="notifications" element={<AdminNotificationsHistory />} />
+                        <Route path="ranking" element={<AdminRanking />} />
+                        <Route path="profile/:id" element={<ProfileView />} />
                     </Routes>
                 </ProtectedRoute>
             } />
@@ -86,8 +100,20 @@ export const AppRouter = () => {
                         <Route path="home" element={<SellerHome />} />
                         <Route path="ventas" element={<SellerSales />} />
                         <Route path="soporte" element={<SellerSupport />} />
-                        <Route path="mis-fiados" element={<SellerMisFiados />} />
-                        <Route path="fiar-usuarios" element={<SellerFiarUsuarios />} />
+                        <Route path="mis-fiados" element={
+                            <ProtectedRoute requiredPermission="canCreditSelf">
+                                <SellerMisFiados />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="fiar-usuarios" element={
+                            <ProtectedRoute requiredPermission="canCreditCustomers">
+                                <SellerFiarUsuarios />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="notificaciones" element={<SellerNotificationsHistory />} />
+                        <Route path="ranking" element={<SellerRanking />} />
+                        <Route path="perfil" element={<SellerProfile />} />
+                        <Route path="profile/:id" element={<ProfileView />} />
                     </Routes>
                 </ProtectedRoute>
             } />

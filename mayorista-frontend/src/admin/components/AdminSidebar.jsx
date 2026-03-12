@@ -10,6 +10,8 @@ import {
     RefreshCw,
     ShoppingBag,
     History,
+    Bell,
+    Trophy,
     X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -129,6 +131,30 @@ function AdminSidebar({ isOpen, onClose, pendingRequestsCount = 0 }) {
                         )}
                     </Link>
 
+                    <Link
+                        to="/admin/ranking"
+                        onClick={handleLinkClick}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${isActive('/admin/ranking')
+                            ? 'text-slate-100 bg-sidebar-hover'
+                            : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
+                            }`}
+                    >
+                        <Trophy className={`w-5 h-5 transition-colors ${isActive('/admin/ranking') ? 'text-primary' : 'group-hover:text-primary'}`} />
+                        <span className="text-sm font-medium">Ranking</span>
+                    </Link>
+
+                    <Link
+                        to="/admin/notifications"
+                        onClick={handleLinkClick}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${isActive('/admin/notifications')
+                            ? 'text-slate-100 bg-sidebar-hover'
+                            : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
+                            }`}
+                    >
+                        <Bell className={`w-5 h-5 transition-colors ${isActive('/admin/notifications') ? 'text-primary' : 'group-hover:text-primary'}`} />
+                        <span className="text-sm font-medium">Notificaciones</span>
+                    </Link>
+
                     <div className="pt-4 mt-4 border-t border-slate-600">
                         <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Administración</p>
                         <Link
@@ -147,9 +173,13 @@ function AdminSidebar({ isOpen, onClose, pendingRequestsCount = 0 }) {
 
                 <div className="p-4 border-t border-slate-600">
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-orange-400 flex items-center justify-center text-white text-xs font-bold">
-                            {user?.fullName?.charAt(0)?.toUpperCase() || 'A'}
-                        </div>
+                        {user?.profilePhotoUrl ? (
+                            <img src={user.profilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-orange-400 flex items-center justify-center text-white text-xs font-bold">
+                                {user?.fullName?.charAt(0)?.toUpperCase() || 'A'}
+                            </div>
+                        )}
                         <div className="flex-1 overflow-hidden">
                             <p className="text-sm font-medium text-white truncate">{user?.fullName || 'Admin'}</p>
                             <p className="text-xs text-slate-400 truncate">{user?.email}</p>

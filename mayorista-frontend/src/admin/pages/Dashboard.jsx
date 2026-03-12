@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -9,8 +8,6 @@ import {
   CheckCircle,
   Settings,
   LogOut,
-  Moon,
-  Sun,
   DollarSign,
   Wallet,
   UserPlus,
@@ -28,14 +25,13 @@ import {
   ShieldCheck,
   Menu
 } from 'lucide-react';
-import { getAllSellers, approveSeller, rejectSeller, getPendingSellers, getSalesUnderReview } from '../../api/admin.api';
+import { getAllSellers, approveSeller, rejectSeller, getPendingSellers, getSalesUnderReview, getUserSales } from '../../api/admin.api';
 import AdminFooter from '../components/AdminFooter';
 import AdminSidebar from '../components/AdminSidebar';
-import NotificationBell from '../../components/NotificationBell';
+import AdminTopbar from '../components/AdminTopbar';
 
 function Dashboard() {
   const { user, logout } = useAuth();
-  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -254,39 +250,11 @@ function Dashboard() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-4 sm:px-8">
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            {/* Mobile hamburger - always visible on mobile */}
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400 md:hidden"
-              title="Abrir menú"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            {/* Desktop toggle - only when sidebar is closed */}
-            {!isSidebarOpen && (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hidden md:block"
-                title="Mostrar menú"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            )}
-            <span className="font-medium text-slate-900 dark:text-white">Dashboard Admin</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <NotificationBell />
-            <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
-            <button
-              onClick={toggleDarkMode}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-            >
-              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-          </div>
-        </header >
+        <AdminTopbar
+          isSidebarOpen={isSidebarOpen}
+          onSidebarOpen={() => setIsSidebarOpen(true)}
+          title="Dashboard Admin"
+        />
 
         {/* Content */}
         <div className="p-4 sm:p-8 flex-1 overflow-y-auto flex flex-col">

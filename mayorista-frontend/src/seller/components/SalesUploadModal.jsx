@@ -79,14 +79,8 @@ function SalesUploadModal({ isOpen, onClose, onUploadSuccess }) {
         } catch (error) {
             console.error('Upload error:', error);
             if (error.response?.status === 400) {
-                // If it's a specific message from backend (like duplicate order), use it
                 const backendMessage = error.response.data?.message || (typeof error.response.data === 'string' ? error.response.data : '');
-
-                if (backendMessage && (backendMessage.includes('ya existe') || backendMessage.includes('número de pedido'))) {
-                    setUploadError(backendMessage);
-                } else {
-                    setUploadError('Archivo inválido o venta duplicada. Asegúrate de que sea un PDF válido y no se haya subido antes.');
-                }
+                setUploadError(backendMessage || 'Archivo inválido. Asegúrate de que sea un PDF válido.');
             } else if (error.response?.status === 409) {
                 const backendMessage = error.response.data?.message || (typeof error.response.data === 'string' ? error.response.data : '');
                 if (backendMessage) {

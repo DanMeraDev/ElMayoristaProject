@@ -402,6 +402,98 @@ public class UserService implements UserDetailsService {
         return userRepository.save(user);
     }
 
+    /**
+     * Actualiza los campos de perfil de un usuario
+     */
+    @CacheEvict(value = CacheConfig.USERS_CACHE, key = "#userId")
+    @Transactional
+    public User updateProfile(UUID userId, UpdateProfileRequest request) {
+        User user = getUserById(userId);
+
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            user.setFullName(request.getFullName().trim());
+        }
+        if (request.getNickname() != null) {
+            user.setNickname(request.getNickname().trim().isEmpty() ? null : request.getNickname().trim());
+        }
+        if (request.getBio() != null) {
+            user.setBio(request.getBio().trim().isEmpty() ? null : request.getBio().trim());
+        }
+        if (request.getCity() != null) {
+            user.setCity(request.getCity().trim().isEmpty() ? null : request.getCity().trim());
+        }
+        if (request.getPhoneNumber() != null) {
+            if (!request.getPhoneNumber().equals(user.getPhoneNumber()) &&
+                    userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+                throw new IllegalArgumentException("El número de teléfono ya está registrado");
+            }
+            user.setPhoneNumber(request.getPhoneNumber());
+        }
+
+        return userRepository.save(user);
+    }
+
+    /**
+     * Actualiza la foto de perfil de un usuario
+     */
+    @CacheEvict(value = CacheConfig.USERS_CACHE, key = "#userId")
+    @Transactional
+    public User updateProfilePhoto(UUID userId, String photoUrl) {
+        User user = getUserById(userId);
+        user.setProfilePhotoUrl(photoUrl);
+        return userRepository.save(user);
+    }
+
+    /**
+     * Actualiza la foto de portada de un usuario
+     */
+    @CacheEvict(value = CacheConfig.USERS_CACHE, key = "#userId")
+    @Transactional
+    public User updateCoverPhoto(UUID userId, String coverUrl) {
+        User user = getUserById(userId);
+        user.setCoverPhotoUrl(coverUrl);
+        return userRepository.save(user);
+    }
+
+    /**
+     * Obtiene el perfil público de un vendedor con estadísticas
+     */
+    @Transactional(readOnly = true)
+    public ProfileDTO getPublicProfile(UUID userId) {
+        User user = getUserById(userId);
+
+        long approvedCount = saleRepository.countBySellerAndStatus(user, SaleStatus.APPROVED);
+        BigDecimal totalApproved = saleRepository.sumTotalBySellerAndStatus(user, SaleStatus.APPROVED);
+        if (totalApproved == null) totalApproved = BigDecimal.ZERO;
+
+        // Calculate ranking position
+        var ranking = saleRepository.findTopSellersByApprovedSales(
+                org.springframework.data.domain.PageRequest.of(0, 100));
+        int position = 0;
+        for (int i = 0; i < ranking.size(); i++) {
+            if (ranking.get(i).getSellerId().equals(userId)) {
+                position = i + 1;
+                break;
+            }
+        }
+
+        return ProfileDTO.builder()
+                .id(user.getId())
+                .fullName(user.getFullName())
+                .nickname(user.getNickname())
+                .profilePhotoUrl(user.getProfilePhotoUrl())
+                .coverPhotoUrl(user.getCoverPhotoUrl())
+                .bio(user.getBio())
+                .city(user.getCity())
+                .phoneNumber(user.getPhoneNumber())
+                .email(user.getEmail())
+                .createdAt(user.getCreatedAt())
+                .approvedSalesCount(approvedCount)
+                .totalApprovedSales(totalApproved)
+                .rankingPosition(position)
+                .build();
+    }
+
     @Transactional
     public void deleteUser(UUID id) {
         // Verificar que el usuario existe

@@ -95,6 +95,21 @@ public class User {
     @Builder.Default
     private Boolean canCreditCustomers = false;
 
+    @Column(name = "profile_photo_url")
+    private String profilePhotoUrl;
+
+    @Column(name = "cover_photo_url")
+    private String coverPhotoUrl;
+
+    @Column(name = "bio", columnDefinition = "TEXT")
+    private String bio;
+
+    @Column(name = "city")
+    private String city;
+
+    @Column(name = "nickname")
+    private String nickname;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

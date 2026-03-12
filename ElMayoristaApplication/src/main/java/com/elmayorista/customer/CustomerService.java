@@ -1,5 +1,6 @@
 package com.elmayorista.customer;
 
+import com.elmayorista.notification.NotificationService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -19,19 +20,21 @@ public class CustomerService {
 
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional
-    public CustomerDTO registerCustomer(UUID sellerId, String fullName, String idNumber, String phoneNumber) {
+    public CustomerDTO registerCustomer(UUID sellerId, String fullName, String idNumber, String idType, String phoneNumber) {
         User seller = userRepository.findById(sellerId)
                 .orElseThrow(() -> new EntityNotFoundException("Vendedor no encontrado"));
 
         if (idNumber != null && !idNumber.isBlank() && customerRepository.existsByIdNumber(idNumber)) {
-            throw new IllegalArgumentException("Ya existe un cliente con esa cedula");
+            throw new IllegalArgumentException("Ya existe un cliente con esa identificacion");
         }
 
         Customer customer = Customer.builder()
                 .fullName(fullName)
                 .idNumber(idNumber)
+                .idType(idType)
                 .phoneNumber(phoneNumber)
                 .status(CustomerStatus.PENDING)
                 .registeredBy(seller)
@@ -39,6 +42,8 @@ public class CustomerService {
 
         customer = customerRepository.save(customer);
         log.info("Customer registered: {} by seller: {}", customer.getId(), seller.getFullName());
+
+        notificationService.notifyAdminsCustomerRegistered(customer);
 
         return toDTO(customer);
     }
@@ -81,6 +86,8 @@ public class CustomerService {
         customer = customerRepository.save(customer);
         log.info("Customer {} approved", id);
 
+        notificationService.notifySellerCustomerApproved(customer);
+
         return toDTO(customer);
     }
 
@@ -108,6 +115,7 @@ public class CustomerService {
                 .id(customer.getId())
                 .fullName(customer.getFullName())
                 .idNumber(customer.getIdNumber())
+                .idType(customer.getIdType())
                 .phoneNumber(customer.getPhoneNumber())
                 .status(customer.getStatus())
                 .rejectionReason(customer.getRejectionReason())

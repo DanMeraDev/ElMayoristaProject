@@ -1,5 +1,6 @@
 package com.elmayorista.sale;
 
+import com.elmayorista.payment.PaymentStatus;
 import com.elmayorista.user.User;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
@@ -19,21 +20,21 @@ import java.util.Optional;
 public interface SaleRepository extends JpaRepository<Sale, Long> {
 
     @Override
-    @EntityGraph(attributePaths = {"seller"})
+    @EntityGraph(attributePaths = {"seller", "details"})
     Optional<Sale> findById(Long id);
 
     @Override
     @EntityGraph(attributePaths = {"seller"})
     Page<Sale> findAll(Pageable pageable);
 
-    @EntityGraph(attributePaths = {"seller"})
+    @EntityGraph(attributePaths = {"seller", "details"})
     Optional<Sale> findByOrderNumber(String orderNumber);
 
     boolean existsByOrderNumber(String orderNumber);
 
     List<Sale> findBySeller(User seller);
 
-    @EntityGraph(attributePaths = {"seller"})
+    @EntityGraph(attributePaths = {"seller", "seller.roles"})
     Page<Sale> findBySeller(User seller, Pageable pageable);
 
     List<Sale> findByStatus(SaleStatus status);
@@ -50,6 +51,9 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
     @Query("SELECT SUM(s.total) FROM Sale s WHERE s.status = :status")
     BigDecimal sumTotalByStatus(SaleStatus status);
 
+    @Query("SELECT SUM(s.total) FROM Sale s WHERE s.seller = :seller AND s.status = :status")
+    BigDecimal sumTotalBySellerAndStatus(User seller, SaleStatus status);
+
     @Query("SELECT SUM(s.commissionAmount) FROM Sale s WHERE s.seller = :seller AND s.status = 'APPROVED'")
     BigDecimal sumCommissionAmountBySeller(User seller);
 
@@ -59,6 +63,7 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
     @Query("SELECT s FROM Sale s WHERE s.seller = :seller AND s.orderDate BETWEEN :startDate AND :endDate")
     List<Sale> findSalesBySellerAndOrderDateBetween(User seller, LocalDateTime startDate, LocalDateTime endDate);
 
+    @EntityGraph(attributePaths = {"seller", "seller.roles", "payments"})
     List<Sale> findByStatusAndCommissionSettledFalse(SaleStatus status);
 
     long countByStatus(SaleStatus status);
@@ -80,7 +85,32 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
 
     long countBySeller(User seller);
 
+    /**
+     * Checks if the seller has any PENDING+UNPAID sales older than the given cutoff (24h).
+     * Used to block new sale creation until all overdue receipts are uploaded.
+     */
+    boolean existsBySellerAndStatusAndPaymentStatusAndCreatedAtBefore(
+            User seller, SaleStatus status, PaymentStatus paymentStatus, LocalDateTime cutoff);
+
+    long countBySellerAndStatusAndPaymentStatusAndCreatedAtBefore(
+            User seller, SaleStatus status, PaymentStatus paymentStatus, LocalDateTime cutoff);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Sale s WHERE s.id = :id")
     Optional<Sale> findByIdForUpdate(Long id);
+
+    @Query("""
+            SELECT new com.elmayorista.sale.SellerRankingDTO(
+                s.seller.id,
+                s.seller.fullName,
+                COALESCE(SUM(s.total), 0),
+                COUNT(s),
+                s.seller.profilePhotoUrl
+            )
+            FROM Sale s
+            WHERE s.status = com.elmayorista.sale.SaleStatus.APPROVED
+            GROUP BY s.seller.id, s.seller.fullName, s.seller.profilePhotoUrl
+            ORDER BY SUM(s.total) DESC
+            """)
+    List<SellerRankingDTO> findTopSellersByApprovedSales(Pageable pageable);
 }

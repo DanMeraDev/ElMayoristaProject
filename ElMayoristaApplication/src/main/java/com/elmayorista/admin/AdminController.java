@@ -1,8 +1,6 @@
 package com.elmayorista.admin;
 
-import com.elmayorista.config.Mapper;
 import com.elmayorista.sale.SaleDTO;
-import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleService;
 import com.elmayorista.user.AdminDashboardStats;
 import com.elmayorista.user.User;
@@ -43,7 +41,6 @@ public class AdminController {
     private final ExcelReportService excelReportService;
     private final SaleService saleService;
     private final NotificationService notificationService;
-    private final Mapper mapper;
 
     // DTO anidado para la solicitud de revisión
     public record ReviewRequest(boolean approved, String rejectionReason) {
@@ -59,8 +56,8 @@ public class AdminController {
      */
     @PostMapping("/sales/{id}/review")
     public ResponseEntity<SaleDTO> reviewSale(@PathVariable Long id, @Valid @RequestBody ReviewRequest request) {
-        Sale reviewedSale = saleService.reviewSale(id, request.approved(), request.rejectionReason());
-        return ResponseEntity.ok(mapper.toSaleDTO(reviewedSale));
+        saleService.reviewSale(id, request.approved(), request.rejectionReason());
+        return ResponseEntity.ok(saleService.getSaleDTOById(id));
     }
 
     /**
@@ -71,8 +68,7 @@ public class AdminController {
      */
     @GetMapping("/sales/under-review")
     public ResponseEntity<Page<SaleDTO>> getSalesUnderReview(Pageable pageable) {
-        Page<Sale> sales = saleService.getSalesByStatus(com.elmayorista.sale.SaleStatus.UNDER_REVIEW, pageable);
-        return ResponseEntity.ok(sales.map(mapper::toSaleDTO));
+        return ResponseEntity.ok(saleService.getSalesByStatusAsDTOs(com.elmayorista.sale.SaleStatus.UNDER_REVIEW, pageable));
     }
 
     /**
@@ -80,8 +76,7 @@ public class AdminController {
      */
     @GetMapping("/sales")
     public ResponseEntity<Page<SaleDTO>> getAllSales(Pageable pageable) {
-        Page<Sale> sales = saleService.getAllSales(pageable);
-        return ResponseEntity.ok(sales.map(mapper::toSaleDTO));
+        return ResponseEntity.ok(saleService.getAllSalesAsDTOs(pageable));
     }
 
     /**

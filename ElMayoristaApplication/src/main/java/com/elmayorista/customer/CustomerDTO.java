@@ -15,6 +15,7 @@ public class CustomerDTO {
     private Long id;
     private String fullName;
     private String idNumber;
+    private String idType;
     private String phoneNumber;
     private CustomerStatus status;
     private String rejectionReason;

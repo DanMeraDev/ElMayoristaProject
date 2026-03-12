@@ -40,5 +40,8 @@ public class SaleDTO {
     private List<SaleDetailDTO> products;
     private List<PaymentDTO> payments;
     private String rejectionReason;
+    private ReturnType returnType;
+    private String returnReason;
+    private LocalDateTime returnedAt;
     private boolean commissionSettled;
 }

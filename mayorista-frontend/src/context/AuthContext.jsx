@@ -37,8 +37,7 @@ export const AuthProvider = ({ children }) => {
             currentPath === '/pending-approval';
 
           if (!isAuthPage) {
-            sessionStorage.setItem('sessionExpired', 'true');
-            window.location.href = '/login';
+            window.location.href = '/login?expired=true';
             return;
           }
         }

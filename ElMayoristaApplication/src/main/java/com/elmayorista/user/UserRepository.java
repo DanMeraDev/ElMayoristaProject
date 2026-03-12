@@ -21,19 +21,19 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     boolean existsByPhoneNumber(String phoneNumber);
     
-    @Query("SELECT u FROM User u JOIN u.roles r WHERE r = :role")
+    @Query("SELECT u FROM User u WHERE :role MEMBER OF u.roles")
     List<User> findByRole(Role role);
-    
-    @Query("SELECT u FROM User u JOIN u.roles r WHERE r = :role")
+
+    @Query("SELECT u FROM User u WHERE :role MEMBER OF u.roles")
     Page<User> findByRole(Role role, Pageable pageable);
-    
-    @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r = :role AND u.enabled = :enabled")
+
+    @Query("SELECT COUNT(u) FROM User u WHERE :role MEMBER OF u.roles AND u.enabled = :enabled")
     long countByRoleAndEnabled(Role role, boolean enabled);
-    
-    @Query("SELECT u FROM User u JOIN u.roles r WHERE r = :role AND u.enabled = :enabled")
+
+    @Query("SELECT u FROM User u WHERE :role MEMBER OF u.roles AND u.enabled = :enabled")
     List<User> findByRoleAndEnabled(Role role, boolean enabled);
-    
-    @Query("SELECT u FROM User u JOIN u.roles r WHERE r = :role AND u.enabled = :enabled")
+
+    @Query("SELECT u FROM User u WHERE :role MEMBER OF u.roles AND u.enabled = :enabled")
     Page<User> findByRoleAndEnabled(Role role, boolean enabled, Pageable pageable);
     
     @Query("""

@@ -63,3 +63,11 @@ export const deleteSale = (saleId) =>
 export const deletePayment = (saleId, paymentId) =>
     axios.delete(`/payments/${saleId}/payments/${paymentId}`);
 
+// Check if seller can create new sales (blocked if has overdue unpaid sales > 24h)
+export const checkCanCreateSale = (userId) =>
+    axios.get(`/users/${userId}/sales/can-create`);
+
+// Get top sellers ranking by approved sales total
+export const getSellerRanking = (limit = 10) =>
+    axios.get(`/sales/ranking?limit=${limit}`);
+

@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-    Moon,
-    Sun,
-    ChevronRight,
     Shield,
     Users,
     DollarSign,
@@ -13,18 +9,25 @@ import {
 } from 'lucide-react';
 import AdminFooter from '../components/AdminFooter';
 import AdminSidebar from '../components/AdminSidebar';
-import NotificationBell from '../../components/NotificationBell';
+import AdminTopbar from '../components/AdminTopbar';
 import RoleManagement from '../components/RoleManagement';
 import FiadoManagement from '../components/FiadoManagement';
 import CustomerManagement from '../components/CustomerManagement';
 
 function AdminSettings() {
     const { user } = useAuth();
-    const { isDarkMode, toggleDarkMode } = useDarkMode();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [activeTab, setActiveTab] = useState('roles');
+    const validTabs = ['roles', 'fiados', 'clientes'];
+    const tabParam = searchParams.get('tab');
+    const [activeTab, setActiveTab] = useState(validTabs.includes(tabParam) ? tabParam : 'roles');
+
+    useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (validTabs.includes(tab)) setActiveTab(tab);
+    }, [searchParams]);
 
     const tabs = [
         { id: 'roles', label: 'Gestión de Roles', icon: Shield },
@@ -44,30 +47,11 @@ function AdminSettings() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-4 sm:px-8">
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        {!isSidebarOpen && (
-                            <button
-                                onClick={() => setIsSidebarOpen(true)}
-                                className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400"
-                                title="Mostrar menú"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        )}
-                        <span className="font-medium text-slate-900 dark:text-white">Configuración</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <NotificationBell />
-                        <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
-                        <button
-                            onClick={toggleDarkMode}
-                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                    </div>
-                </header>
+                <AdminTopbar
+                    isSidebarOpen={isSidebarOpen}
+                    onSidebarOpen={() => setIsSidebarOpen(true)}
+                    title="Configuración"
+                />
 
                 {/* Content */}
                 <div className="p-4 sm:p-8 flex-1 overflow-y-auto flex flex-col">

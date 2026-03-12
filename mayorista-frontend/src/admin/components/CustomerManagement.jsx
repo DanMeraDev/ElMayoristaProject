@@ -8,7 +8,9 @@ import {
     XCircle,
     Clock,
     Phone,
-    CreditCard
+    CreditCard,
+    Globe,
+    ShieldCheck
 } from 'lucide-react';
 import { getAllCustomers, approveCustomer, rejectCustomer } from '../../api/customer.api';
 
@@ -216,8 +218,22 @@ function CustomerManagement() {
                                         <td className="py-4 px-6">
                                             <p className="font-medium text-slate-900 dark:text-white">{customer.fullName}</p>
                                         </td>
-                                        <td className="py-4 px-6 text-slate-600 dark:text-slate-300">
-                                            {customer.idNumber || '-'}
+                                        <td className="py-4 px-6">
+                                            <p className="text-slate-600 dark:text-slate-300">{customer.idNumber || '-'}</p>
+                                            {customer.idType && (
+                                                <span className={`inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                                    customer.idType === 'CEDULA'
+                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                        : customer.idType === 'RUC'
+                                                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                                                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                                }`}>
+                                                    {customer.idType === 'CEDULA' || customer.idType === 'RUC'
+                                                        ? <ShieldCheck className="w-2.5 h-2.5" />
+                                                        : <Globe className="w-2.5 h-2.5" />}
+                                                    {customer.idType === 'CEDULA' ? 'Cédula' : customer.idType === 'RUC' ? 'RUC' : customer.idType === 'PASAPORTE' ? 'Pasaporte' : 'ID Extranjero'}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="py-4 px-6 text-slate-600 dark:text-slate-300">
                                             {customer.phoneNumber ? (

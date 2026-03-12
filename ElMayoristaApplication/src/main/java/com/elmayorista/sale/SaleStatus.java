@@ -4,5 +4,6 @@ public enum SaleStatus {
     PENDING,
     UNDER_REVIEW,
     APPROVED,
-    REJECTED
+    REJECTED,
+    RETURNED
 }

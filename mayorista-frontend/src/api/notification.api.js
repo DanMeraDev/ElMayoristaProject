@@ -17,3 +17,6 @@ export const markAsRead = async (id) => {
 export const markAllAsRead = async () => {
     await axios.put('/notifications/read-all');
 };
+
+export const getNotificationHistory = (page = 0, size = 20) =>
+    axios.get(`/notifications/history?page=${page}&size=${size}`);

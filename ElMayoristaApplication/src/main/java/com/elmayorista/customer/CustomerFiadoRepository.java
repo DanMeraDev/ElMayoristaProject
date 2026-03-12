@@ -1,5 +1,6 @@
 package com.elmayorista.customer;
 
+import com.elmayorista.fiado.FiadoStatus;
 import com.elmayorista.user.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -14,7 +15,7 @@ public interface CustomerFiadoRepository extends JpaRepository<CustomerFiado, Lo
 
     List<CustomerFiado> findAllByOrderByCreatedAtDesc();
 
-    List<CustomerFiado> findBySettledInCycleFalse();
+    List<CustomerFiado> findByStatusAndSettledInCycleFalse(FiadoStatus status);
 
-    List<CustomerFiado> findBySellerAndSettledInCycleFalse(User seller);
+    List<CustomerFiado> findBySellerAndStatusAndSettledInCycleFalse(User seller, FiadoStatus status);
 }

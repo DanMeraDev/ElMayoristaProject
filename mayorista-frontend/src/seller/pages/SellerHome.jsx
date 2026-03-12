@@ -1,18 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   FileText,
   Camera,
-  ChevronRight,
-  ChevronLeft,
   AlertCircle,
   CheckCircle,
   Clock,
   DollarSign,
   ShoppingBag,
-  Percent,
   X,
   Upload,
   Loader2,
@@ -22,21 +18,19 @@ import {
   TrendingUp,
   Wallet,
   Filter,
-  Moon,
-  Sun
 } from 'lucide-react';
 import SellerSidebar from '../components/SellerSidebar';
 import SellerFooter from '../components/SellerFooter';
 import SalesUploadModal from '../components/SalesUploadModal';
 import PendingSalesPanel from '../components/PendingSalesPanel';
-import NotificationBell from '../../components/NotificationBell';
+import SellerTopbar from '../components/SellerTopbar';
+import SaleDetailModal from '../../components/SaleDetailModal';
 import useSellerSales from '../hooks/useSellerSales';
 import useReceiptPayment from '../hooks/useReceiptPayment';
 
 
 function SellerHome() {
   const { user, logout } = useAuth();
-  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const navigate = useNavigate();
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -166,33 +160,11 @@ function SellerHome() {
         {/* Main Content Area */}
         <main className={`flex-1 h-full overflow-y-auto transition-all duration-300 ${isSidebarOpen ? 'md:ml-64' : 'md:ml-0'}`}>
           {/* Top Header */}
-          <header className="bg-white dark:bg-surface-dark border-b border-gray-200 dark:border-border-dark h-16 flex items-center justify-between px-6 sticky top-0 z-20 shadow-sm transition-colors duration-200">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className={`flex mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500 dark:text-slate-400 ${isSidebarOpen ? 'md:hidden' : ''}`}
-                title={isSidebarOpen ? "Cerrar menu" : "Mostrar menu"}
-              >
-                {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-              </button>
-              <h1 className="text-xl font-semibold text-gray-800 dark:text-white">Dashboard Vendedor</h1>
-            </div>
-            <div className="flex items-center gap-4 md:gap-6">
-              <div className="hidden md:flex items-center bg-gray-50 dark:bg-slate-800 px-4 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 transition-colors">
-                <Percent className="w-4 h-4 text-primary mr-2" />
-                <span className="text-sm font-bold text-gray-700 dark:text-slate-200">Mi Comision: <span className="text-primary">{userCommission}%</span></span>
-              </div>
-              <div className="h-6 w-px bg-gray-200 dark:bg-slate-700 hidden md:block"></div>
-              <button
-                onClick={toggleDarkMode}
-                className="p-2 text-gray-400 hover:text-primary dark:text-slate-400 dark:hover:text-white rounded-full hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                title={isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-              >
-                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-              <NotificationBell />
-            </div>
-          </header>
+          <SellerTopbar
+            isSidebarOpen={isSidebarOpen}
+            onSidebarOpen={() => setIsSidebarOpen(true)}
+            title="Dashboard Vendedor"
+          />
 
           {/* Main Content */}
           <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
@@ -541,117 +513,11 @@ function SellerHome() {
         </main>
 
         {/* Sale Detail Modal */}
-        {selectedSale && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-surface-dark rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto transition-colors">
-              <div className="sticky top-0 bg-white dark:bg-surface-dark px-6 py-4 border-b border-gray-100 dark:border-border-dark flex items-center justify-between z-10">
-                <h3 className="text-lg font-bold text-mayorista-text-primary dark:text-white">
-                  Venta #{selectedSale.orderNumber || selectedSale.id}
-                </h3>
-                <button
-                  onClick={() => setSelectedSale(null)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-500 dark:text-slate-400"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-slate-400">Cliente</p>
-                    <p className="font-medium text-gray-800 dark:text-white">{selectedSale.customerName || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-slate-400">Fecha</p>
-                    <p className="font-medium text-gray-800 dark:text-white">{formatDate(selectedSale.date || selectedSale.createdAt)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-slate-400">Estado</p>
-                    <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(selectedSale.status)}`}>
-                      {getStatusLabel(selectedSale.status)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-slate-300">Subtotal</span>
-                    <span className="text-gray-800 dark:text-white">{formatCurrency(selectedSale.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-slate-300">Envio</span>
-                    <span className="text-gray-800 dark:text-white">{formatCurrency(selectedSale.shippingCost || selectedSale.shipping || 0)}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-lg border-t border-gray-200 dark:border-slate-700 pt-2 mt-2">
-                    <span className="text-gray-800 dark:text-white">Total Venta</span>
-                    <span className="text-mayorista-red">{formatCurrency(selectedSale.totalAmount || selectedSale.total)}</span>
-                  </div>
-                </div>
-
-                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm text-green-700 dark:text-green-400">Mi Comision ({selectedSale.commissionPercentage || userCommission}%)</p>
-                      <p className="text-xl font-bold text-green-700 dark:text-green-400">
-                        {formatCurrency(selectedSale.commissionAmount)}
-                      </p>
-                    </div>
-                    <DollarSign className="w-8 h-8 text-green-500 dark:text-green-400" />
-                  </div>
-                </div>
-
-                {selectedSale.receiptImageUrl && (
-                  <div>
-                    <p className="text-sm text-gray-500 dark:text-slate-400 mb-2">Comprobante</p>
-                    <img
-                      src={selectedSale.receiptImageUrl}
-                      alt="Comprobante"
-                      className="rounded-lg max-w-full h-auto border border-gray-200 dark:border-slate-700"
-                    />
-                  </div>
-                )}
-
-                {selectedSale.reportPdfUrl && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-gray-500 dark:text-slate-400">Reporte PDF</p>
-                      <a
-                        href={selectedSale.reportPdfUrl}
-                        download={`Reporte-${selectedSale.orderNumber || selectedSale.id}.pdf`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <FileText className="w-3 h-3" />
-                        Descargar PDF
-                      </a>
-                    </div>
-                    <iframe
-                      src={selectedSale.reportPdfUrl}
-                      width="100%"
-                      height="400px"
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white"
-                      title={`Reporte de Venta ${selectedSale.orderNumber || selectedSale.id}`}
-                    >
-                      Cargando PDF...
-                    </iframe>
-                  </div>
-                )}
-              </div>
-
-              <div className="px-6 py-4 border-t border-gray-100 dark:border-border-dark flex justify-end">
-                <button
-                  onClick={() => setSelectedSale(null)}
-                  className="w-full sm:w-auto px-4 py-2 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200 font-medium rounded-lg transition-colors"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <SaleDetailModal
+          sale={selectedSale}
+          onClose={() => setSelectedSale(null)}
+          userCommission={userCommission}
+        />
 
         {/* Logout Confirmation Modal */}
         {showLogoutModal && (

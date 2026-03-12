@@ -8,7 +8,20 @@ export const closeCycle = async () => {
     });
     return response.data;
   } catch (error) {
-    throw error.response?.data || error;
+    // When responseType is 'blob', error response body is also a Blob — read it as text
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text();
+        const json = JSON.parse(text);
+        throw new Error(json.message || text);
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message && !parseErr.message.startsWith('JSON')) {
+          throw parseErr;
+        }
+        throw new Error('Error al cerrar el ciclo.');
+      }
+    }
+    throw error;
   }
 };
 
@@ -94,8 +107,21 @@ export const getAllFiados = () => axios.get('/fiados/admin/all');
 // Delete a fiado (admin)
 export const adminDeleteFiado = (fiadoId) => axios.delete(`/fiados/admin/${fiadoId}`);
 
+// Approve / Reject a seller fiado
+export const adminApproveFiado = (fiadoId) => axios.post(`/fiados/admin/${fiadoId}/approve`);
+export const adminRejectFiado = (fiadoId) => axios.post(`/fiados/admin/${fiadoId}/reject`);
+
 // Get all customer fiados
 export const getAllCustomerFiados = () => axios.get('/customer-fiados/admin/all');
 
 // Delete a customer fiado (admin)
 export const adminDeleteCustomerFiado = (fiadoId) => axios.delete(`/customer-fiados/admin/${fiadoId}`);
+
+// Approve / Reject a customer fiado
+export const adminApproveCustomerFiado = (fiadoId) => axios.post(`/customer-fiados/admin/${fiadoId}/approve`);
+export const adminRejectCustomerFiado = (fiadoId) => axios.post(`/customer-fiados/admin/${fiadoId}/reject`);
+
+// Process a return/refund for a sale (admin only)
+// returnType: 'REFUND' | 'EXCHANGE'
+export const processSaleReturn = (saleId, returnType, reason) =>
+  axios.post(`/sales/${saleId}/return`, { returnType, reason });

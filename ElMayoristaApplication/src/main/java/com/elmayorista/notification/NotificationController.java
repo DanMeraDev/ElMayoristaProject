@@ -7,6 +7,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -23,6 +26,13 @@ public class NotificationController {
     public ResponseEntity<List<NotificationDTO>> getNotifications(Authentication authentication) {
         UUID userId = getUserId(authentication);
         return ResponseEntity.ok(notificationService.getUserNotifications(userId));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<Page<NotificationDTO>> getNotificationsHistory(
+            Authentication authentication, Pageable pageable) {
+        UUID userId = getUserId(authentication);
+        return ResponseEntity.ok(notificationService.getUserNotificationsPaginated(userId, pageable));
     }
 
     @GetMapping("/unread-count")

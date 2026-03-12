@@ -1,5 +1,6 @@
 package com.elmayorista.fiado;
 
+import com.elmayorista.notification.NotificationService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -20,6 +21,7 @@ public class FiadoService {
 
     private final FiadoRepository fiadoRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public FiadoDTO createFiado(UUID sellerId, String itemName, BigDecimal price) {
@@ -36,9 +38,12 @@ public class FiadoService {
         fiado = fiadoRepository.save(fiado);
         log.info("Fiado created: {} by seller: {}", fiado.getId(), seller.getFullName());
 
+        notificationService.notifyAdminsFiadoCreated(fiado);
+
         return toDTO(fiado);
     }
 
+    @Transactional(readOnly = true)
     public List<FiadoDTO> getSellerFiados(UUID sellerId) {
         return fiadoRepository.findBySellerIdOrderByCreatedAtDesc(sellerId)
                 .stream()
@@ -61,6 +66,33 @@ public class FiadoService {
     }
 
     @Transactional
+    public FiadoDTO adminApproveFiado(Long id) {
+        Fiado fiado = fiadoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Fiado no encontrado"));
+        if (fiado.getStatus() != FiadoStatus.PENDING) {
+            throw new IllegalStateException("Solo se pueden aprobar fiados pendientes");
+        }
+        fiado.setStatus(FiadoStatus.APPROVED);
+        fiado = fiadoRepository.save(fiado);
+        notificationService.notifySellerFiadoApproved(fiado.getSeller(), fiado.getId(), fiado.getItemName(), false, null);
+        log.info("Fiado {} approved by admin", id);
+        return toDTO(fiado);
+    }
+
+    @Transactional
+    public void adminRejectFiado(Long id) {
+        Fiado fiado = fiadoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Fiado no encontrado"));
+        if (fiado.getStatus() != FiadoStatus.PENDING) {
+            throw new IllegalStateException("Solo se pueden rechazar fiados pendientes");
+        }
+        fiado.setStatus(FiadoStatus.REJECTED);
+        fiadoRepository.save(fiado);
+        notificationService.notifySellerFiadoRejected(fiado.getSeller(), fiado.getId(), fiado.getItemName(), false, null);
+        log.info("Fiado {} rejected by admin", id);
+    }
+
+    @Transactional
     public void deleteFiado(Long id, UUID sellerId) {
         Fiado fiado = fiadoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Fiado no encontrado"));
@@ -77,6 +109,7 @@ public class FiadoService {
         log.info("Fiado {} deleted by seller {}", id, sellerId);
     }
 
+    @Transactional(readOnly = true)
     public List<FiadoDTO> getAllFiados() {
         return fiadoRepository.findAllByOrderByCreatedAtDesc()
                 .stream()

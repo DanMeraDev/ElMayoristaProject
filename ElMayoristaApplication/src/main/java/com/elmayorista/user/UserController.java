@@ -1,19 +1,24 @@
 package com.elmayorista.user;
 
-import com.elmayorista.sale.Sale;
+import com.elmayorista.sale.SaleDTO;
 import com.elmayorista.sale.SaleService;
+import com.elmayorista.service.FileStorageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -23,6 +28,7 @@ public class UserController {
 
     private final UserService userService;
     private final SaleService saleService;
+    private final FileStorageService fileStorageService;
 
     /**
      * Obtiene todos los usuarios (paginado)
@@ -67,8 +73,23 @@ public class UserController {
      * @return Lista de ventas del usuario
      */
     @GetMapping("/{id}/sales")
-    public ResponseEntity<Page<Sale>> getSellerSales(@PathVariable UUID id, Pageable pageable) {
-        return ResponseEntity.ok(saleService.getSalesBySeller(id, pageable));
+    public ResponseEntity<Page<SaleDTO>> getSellerSales(@PathVariable UUID id, Pageable pageable) {
+        return ResponseEntity.ok(saleService.getSalesBySellerAsDTOs(id, pageable));
+    }
+
+    /**
+     * Verifica si el vendedor puede registrar nuevas ventas.
+     * Retorna blocked=true si tiene ventas PENDING+UNPAID con más de 24 horas sin comprobante.
+     */
+    @GetMapping("/{id}/sales/can-create")
+    public ResponseEntity<Map<String, Object>> canSellerCreateSale(@PathVariable UUID id) {
+        User seller = userService.getUserById(id);
+        boolean blocked = saleService.isSellerBlockedFromNewSales(seller);
+        long overdueCount = blocked ? saleService.countOverdueSalesForSeller(seller) : 0;
+        return ResponseEntity.ok(Map.of(
+                "canCreate", !blocked,
+                "overdueCount", overdueCount
+        ));
     }
 
     /**
@@ -120,8 +141,63 @@ public class UserController {
     }
 
     /**
+     * Obtiene el perfil público de un vendedor (visible para todos los autenticados)
+     */
+    @GetMapping("/{id}/profile")
+    public ResponseEntity<ProfileDTO> getPublicProfile(@PathVariable UUID id) {
+        return ResponseEntity.ok(userService.getPublicProfile(id));
+    }
+
+    /**
+     * Actualiza el perfil del usuario autenticado
+     */
+    @PutMapping("/me/profile")
+    public ResponseEntity<User> updateMyProfile(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody UpdateProfileRequest request) {
+        String email = userDetails.getUsername();
+        User user = userService.getUserByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        return ResponseEntity.ok(userService.updateProfile(user.getId(), request));
+    }
+
+    /**
+     * Sube/actualiza la foto de perfil del usuario autenticado
+     */
+    @PostMapping(value = "/me/profile-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadProfilePhoto(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        String email = userDetails.getUsername();
+        User user = userService.getUserByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        String url = fileStorageService.uploadFile(file, "profile-photos");
+        userService.updateProfilePhoto(user.getId(), url);
+
+        return ResponseEntity.ok(Map.of("url", url));
+    }
+
+    /**
+     * Sube/actualiza la foto de portada del usuario autenticado
+     */
+    @PostMapping(value = "/me/cover-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadCoverPhoto(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        String email = userDetails.getUsername();
+        User user = userService.getUserByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        String url = fileStorageService.uploadFile(file, "cover-photos");
+        userService.updateCoverPhoto(user.getId(), url);
+
+        return ResponseEntity.ok(Map.of("url", url));
+    }
+
+    /**
      * Elimina un usuario
-     * 
+     *
      * @param id ID del usuario a eliminar
      * @return Respuesta sin contenido
      */

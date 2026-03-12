@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, ShoppingBag, FileText, Info, LogOut, ChevronLeft, CreditCard, Users } from 'lucide-react';
+import { Home, ShoppingBag, FileText, Info, LogOut, ChevronLeft, CreditCard, Users, Bell, Trophy, UserCircle } from 'lucide-react';
 
 function SellerSidebar({ isOpen, setIsOpen, user, onLogout }) {
     const location = useLocation();
@@ -77,8 +77,43 @@ function SellerSidebar({ isOpen, setIsOpen, user, onLogout }) {
                     </Link>
                 )}
 
+                <Link
+                    to="/seller/ranking"
+                    onClick={() => window.innerWidth < 768 && setIsOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${location.pathname === '/seller/ranking'
+                        ? 'text-slate-100 bg-sidebar-hover'
+                        : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
+                        }`}
+                >
+                    <Trophy className={`w-5 h-5 transition-colors ${location.pathname === '/seller/ranking' ? 'text-primary' : 'group-hover:text-primary'}`} />
+                    <span className="text-sm font-medium">Ranking</span>
+                </Link>
+
+                <Link
+                    to="/seller/notificaciones"
+                    onClick={() => window.innerWidth < 768 && setIsOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${location.pathname === '/seller/notificaciones'
+                        ? 'text-slate-100 bg-sidebar-hover'
+                        : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
+                        }`}
+                >
+                    <Bell className={`w-5 h-5 transition-colors ${location.pathname === '/seller/notificaciones' ? 'text-primary' : 'group-hover:text-primary'}`} />
+                    <span className="text-sm font-medium">Notificaciones</span>
+                </Link>
+
                 <div className="pt-4 mt-4 border-t border-slate-600">
-                    <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Ayuda</p>
+                    <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Cuenta</p>
+                    <Link
+                        to="/seller/perfil"
+                        onClick={() => window.innerWidth < 768 && setIsOpen(false)}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${location.pathname === '/seller/perfil'
+                            ? 'text-slate-100 bg-sidebar-hover'
+                            : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
+                            }`}
+                    >
+                        <UserCircle className={`w-5 h-5 transition-colors ${location.pathname === '/seller/perfil' ? 'text-primary' : 'group-hover:text-primary'}`} />
+                        <span className="text-sm font-medium">Mi Perfil</span>
+                    </Link>
                     <Link to="/seller/soporte" onClick={() => window.innerWidth < 768 && setIsOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${location.pathname === '/seller/soporte'
                         ? 'text-slate-100 bg-sidebar-hover'
                         : 'text-slate-400 hover:text-white hover:bg-sidebar-hover'
@@ -91,9 +126,13 @@ function SellerSidebar({ isOpen, setIsOpen, user, onLogout }) {
 
             <div className="p-4 border-t border-slate-600">
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-orange-400 flex items-center justify-center text-white text-xs font-bold">
-                        {user?.fullName?.charAt(0)?.toUpperCase() || 'V'}
-                    </div>
+                    {user?.profilePhotoUrl ? (
+                        <img src={user.profilePhotoUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-orange-400 flex items-center justify-center text-white text-xs font-bold">
+                            {user?.fullName?.charAt(0)?.toUpperCase() || 'V'}
+                        </div>
+                    )}
                     <div className="flex-1 overflow-hidden">
                         <p className="text-sm font-medium text-white truncate">{user?.fullName || 'Vendedor'}</p>
                         <p className="text-xs text-slate-400 truncate">{user?.email}</p>

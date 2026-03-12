@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    ChevronRight,
-    Moon,
-    Sun,
     FileSpreadsheet,
     Download,
     Calendar,
@@ -18,15 +15,13 @@ import {
     X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
 import { getCycles, getCurrentCycleStats, closeCycle, getSalesUnderReview } from '../../api/admin.api';
 import AdminFooter from '../components/AdminFooter';
 import AdminSidebar from '../components/AdminSidebar';
-import NotificationBell from '../../components/NotificationBell';
+import AdminTopbar from '../components/AdminTopbar';
 
 function AdminReports() {
     const { user } = useAuth();
-    const { isDarkMode, toggleDarkMode } = useDarkMode();
     const navigate = useNavigate();
 
     // Sidebar state
@@ -96,9 +91,7 @@ function AdminReports() {
             await loadData(); // Refresh data
         } catch (err) {
             console.error('Error closing cycle:', err);
-            const errorMsg = err.response?.data
-                ? (typeof err.response.data === 'string' ? err.response.data : 'Error al cerrar el ciclo.')
-                : 'Error al cerrar el ciclo. Por favor intenta nuevamente.';
+            const errorMsg = err?.message || 'Error al cerrar el ciclo. Por favor intenta nuevamente.';
             showNotification('error', errorMsg);
         } finally {
             setIsClosing(false);
@@ -154,37 +147,20 @@ function AdminReports() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-4 sm:px-8">
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        {!isSidebarOpen && (
-                            <button
-                                onClick={() => setIsSidebarOpen(true)}
-                                className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400"
-                                title="Mostrar menú"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        )}
-                        <BarChart3 className="w-5 h-5 text-primary" />
-                        <span className="font-medium text-slate-900 dark:text-white">Reportes</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={loadData}
-                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                            title="Actualizar datos"
-                        >
-                            <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-                        </button>
-                        <NotificationBell />
-                        <button
-                            onClick={toggleDarkMode}
-                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                    </div>
-                </header>
+                <AdminTopbar
+                    isSidebarOpen={isSidebarOpen}
+                    onSidebarOpen={() => setIsSidebarOpen(true)}
+                    title="Reportes"
+                    icon={<BarChart3 className="w-5 h-5" />}
+                >
+                    <button
+                        onClick={loadData}
+                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                        title="Actualizar datos"
+                    >
+                        <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                </AdminTopbar>
 
                 {/* Content */}
                 <div className="p-4 sm:p-8 space-y-6 flex-1 overflow-y-auto">

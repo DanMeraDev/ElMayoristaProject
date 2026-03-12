@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Clock, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { getNotifications, getUnreadCount, markAsRead, markAllAsRead } from '../api/notification.api';
@@ -12,24 +12,63 @@ function NotificationBell() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
     const dropdownRef = useRef(null);
+    const prevCountRef = useRef(null);
 
-    // Poll unread count every 60 seconds
+    const playNotificationSound = useCallback(() => {
+        try {
+            const audio = new Audio('/sounds/notification.mp3');
+            audio.volume = 1.0;
+            audio.play().catch(() => {});
+        } catch {}
+    }, []);
+
+    // Actualizar título de la pestaña con el conteo de no leídas
+    useEffect(() => {
+        if (unreadCount > 0) {
+            document.title = `(${unreadCount > 99 ? '99+' : unreadCount}) El Mayorista`;
+        } else {
+            document.title = 'El Mayorista';
+        }
+    }, [unreadCount]);
+
+    // Poll unread count every 10 seconds
     useEffect(() => {
         if (!user) return;
 
         const fetchCount = async () => {
             try {
                 const count = await getUnreadCount();
+                if (prevCountRef.current !== null && count > prevCountRef.current) {
+                    playNotificationSound();
+                }
+                prevCountRef.current = count;
                 setUnreadCount(count);
-            } catch (error) {
-                // Silently fail - don't disrupt the UI
+            } catch {
+                // Silently fail
             }
         };
 
         fetchCount();
-        const interval = setInterval(fetchCount, 60000);
+        const interval = setInterval(fetchCount, 10000);
         return () => clearInterval(interval);
     }, [user]);
+
+    // Cuando el dropdown está abierto, refrescar la lista cada 10 segundos
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const refreshList = async () => {
+            try {
+                const data = await getNotifications();
+                setNotifications(data);
+            } catch {
+                // Silently fail
+            }
+        };
+
+        const interval = setInterval(refreshList, 10000);
+        return () => clearInterval(interval);
+    }, [isOpen]);
 
     // Close dropdown on click outside
     useEffect(() => {
@@ -62,6 +101,28 @@ function NotificationBell() {
         }
     };
 
+    const getNotificationRoute = (notification) => {
+        const roles = user?.roles || [];
+        const type = notification.type;
+
+        if (roles.includes('ADMIN')) {
+            if (type === 'FIADO_CREATED') return '/admin/settings?tab=fiados';
+            if (type === 'CUSTOMER_REGISTERED') return '/admin/settings?tab=clientes';
+            if (type === 'RANKING_ACHIEVEMENT') return '/admin/ranking';
+            if (type === 'SALE_CREATED') return '/admin/sales-history';
+            return '/admin/sales-review';
+        }
+
+        if (roles.includes('SELLER')) {
+            if (type === 'CUSTOMER_APPROVED') return '/seller/fiar-usuarios';
+            if (type === 'FIADO_APPROVED' || type === 'FIADO_REJECTED') return '/seller/mis-fiados';
+            if (type === 'RANKING_ACHIEVEMENT') return '/seller/ranking';
+            return '/seller/ventas';
+        }
+
+        return null;
+    };
+
     const handleNotificationClick = async (notification) => {
         try {
             if (!notification.read) {
@@ -77,13 +138,8 @@ function NotificationBell() {
 
         setIsOpen(false);
 
-        // Navigate based on user role
-        const roles = user?.roles || [];
-        if (roles.includes('SELLER')) {
-            navigate('/seller/ventas');
-        } else if (roles.includes('ADMIN')) {
-            navigate('/admin/sales-review');
-        }
+        const route = getNotificationRoute(notification);
+        if (route) navigate(route);
     };
 
     const handleMarkAllRead = async () => {
@@ -190,20 +246,32 @@ function NotificationBell() {
                                     <div className="flex items-start gap-3">
                                         <div className={`mt-0.5 p-1.5 rounded-lg ${
                                             !notification.read
-                                                ? notification.type === 'SALE_PENDING_ADMIN_ALERT'
+                                                ? notification.type === 'SALE_PENDING_ADMIN_ALERT' || notification.type === 'SALE_REJECTED' || notification.type === 'SALE_RETURNED'
                                                     ? 'bg-red-100 dark:bg-red-900/30'
                                                     : notification.type === 'SALE_UNDER_REVIEW'
                                                         ? 'bg-purple-100 dark:bg-purple-900/30'
-                                                        : 'bg-orange-100 dark:bg-orange-900/30'
+                                                        : notification.type === 'SALE_APPROVED' || notification.type === 'CUSTOMER_REGISTERED' || notification.type === 'CUSTOMER_APPROVED'
+                                                            ? 'bg-green-100 dark:bg-green-900/30'
+                                                            : notification.type === 'FIADO_CREATED'
+                                                                ? 'bg-blue-100 dark:bg-blue-900/30'
+                                                                : notification.type === 'RANKING_ACHIEVEMENT'
+                                                                    ? 'bg-yellow-100 dark:bg-yellow-900/30'
+                                                                    : 'bg-orange-100 dark:bg-orange-900/30'
                                                 : 'bg-gray-100 dark:bg-slate-700'
                                         }`}>
                                             <AlertCircle className={`w-4 h-4 ${
                                                 !notification.read
-                                                    ? notification.type === 'SALE_PENDING_ADMIN_ALERT'
+                                                    ? notification.type === 'SALE_PENDING_ADMIN_ALERT' || notification.type === 'SALE_REJECTED' || notification.type === 'SALE_RETURNED'
                                                         ? 'text-red-600 dark:text-red-400'
                                                         : notification.type === 'SALE_UNDER_REVIEW'
                                                             ? 'text-purple-600 dark:text-purple-400'
-                                                            : 'text-orange-600 dark:text-orange-400'
+                                                            : notification.type === 'SALE_APPROVED' || notification.type === 'CUSTOMER_REGISTERED' || notification.type === 'CUSTOMER_APPROVED'
+                                                                ? 'text-green-600 dark:text-green-400'
+                                                                : notification.type === 'FIADO_CREATED'
+                                                                    ? 'text-blue-600 dark:text-blue-400'
+                                                                    : notification.type === 'RANKING_ACHIEVEMENT'
+                                                                        ? 'text-yellow-600 dark:text-yellow-400'
+                                                                        : 'text-orange-600 dark:text-orange-400'
                                                     : 'text-gray-400 dark:text-slate-500'
                                             }`} />
                                         </div>
@@ -246,16 +314,25 @@ function NotificationBell() {
                     </div>
 
                     {/* Footer */}
-                    {notifications.length > 0 && (
-                        <div className="px-4 py-2.5 border-t border-gray-100 dark:border-border-dark bg-gray-50/50 dark:bg-slate-800/50">
-                            <p className="text-xs text-center text-slate-500 dark:text-slate-400">
-                                {unreadCount > 0
-                                    ? `${unreadCount} notificacion${unreadCount !== 1 ? 'es' : ''} sin leer`
-                                    : 'Todas las notificaciones leidas'
-                                }
-                            </p>
-                        </div>
-                    )}
+                    <div className="px-4 py-2.5 border-t border-gray-100 dark:border-border-dark bg-gray-50/50 dark:bg-slate-800/50 flex items-center justify-between gap-2">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {unreadCount > 0
+                                ? `${unreadCount} notificacion${unreadCount !== 1 ? 'es' : ''} sin leer`
+                                : 'Todas las notificaciones leidas'
+                            }
+                        </p>
+                        <button
+                            onClick={() => {
+                                setIsOpen(false);
+                                const roles = user?.roles || [];
+                                if (roles.includes('ADMIN')) navigate('/admin/notifications');
+                                else navigate('/seller/notificaciones');
+                            }}
+                            className="text-xs text-primary hover:text-primary-hover font-medium transition-colors whitespace-nowrap"
+                        >
+                            Ver historial
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

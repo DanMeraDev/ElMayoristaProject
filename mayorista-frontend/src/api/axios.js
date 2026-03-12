@@ -22,6 +22,12 @@ instance.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    if (error.response?.status === 429) {
+      const msg = error.response?.data?.message || 'Demasiadas solicitudes. Por favor espera un momento antes de continuar.';
+      window.dispatchEvent(new CustomEvent('rate-limit', { detail: { message: msg } }));
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 || error.response?.status === 403) {
       const isForbidden = error.response?.status === 403;
 
@@ -31,15 +37,7 @@ instance.interceptors.response.use(
         currentPath === '/forgot-password' || currentPath === '/reset-password';
 
       if (!isAuthPage) {
-        // Store message to show on login page
-        if (isForbidden) {
-          sessionStorage.setItem('loginError', 'Tu cuenta ha sido deshabilitada. Contacta al administrador.');
-        } else {
-          sessionStorage.setItem('sessionExpired', 'true');
-        }
-
-        // Redirect to login page
-        window.location.href = '/login';
+        window.location.href = isForbidden ? '/login?error=disabled' : '/login?expired=true';
       }
     }
 

@@ -1,6 +1,7 @@
 package com.elmayorista.customer;
 
 import com.elmayorista.fiado.FiadoStatus;
+import com.elmayorista.notification.NotificationService;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -22,6 +23,7 @@ public class CustomerFiadoService {
     private final CustomerFiadoRepository customerFiadoRepository;
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public CustomerFiadoDTO createCustomerFiado(UUID sellerId, Long customerId, String itemName, BigDecimal price) {
@@ -46,6 +48,8 @@ public class CustomerFiadoService {
         fiado = customerFiadoRepository.save(fiado);
         log.info("Customer fiado created: {} for customer {} by seller {}", fiado.getId(), customer.getFullName(), seller.getFullName());
 
+        notificationService.notifyAdminsCustomerFiadoCreated(fiado);
+
         return toDTO(fiado);
     }
 
@@ -63,6 +67,33 @@ public class CustomerFiadoService {
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public CustomerFiadoDTO adminApproveCustomerFiado(Long id) {
+        CustomerFiado fiado = customerFiadoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Fiado de cliente no encontrado"));
+        if (fiado.getStatus() != FiadoStatus.PENDING) {
+            throw new IllegalStateException("Solo se pueden aprobar fiados pendientes");
+        }
+        fiado.setStatus(FiadoStatus.APPROVED);
+        fiado = customerFiadoRepository.save(fiado);
+        notificationService.notifySellerFiadoApproved(fiado.getSeller(), fiado.getId(), fiado.getItemName(), true, fiado.getCustomer().getFullName());
+        log.info("Customer fiado {} approved by admin", id);
+        return toDTO(fiado);
+    }
+
+    @Transactional
+    public void adminRejectCustomerFiado(Long id) {
+        CustomerFiado fiado = customerFiadoRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Fiado de cliente no encontrado"));
+        if (fiado.getStatus() != FiadoStatus.PENDING) {
+            throw new IllegalStateException("Solo se pueden rechazar fiados pendientes");
+        }
+        fiado.setStatus(FiadoStatus.REJECTED);
+        customerFiadoRepository.save(fiado);
+        notificationService.notifySellerFiadoRejected(fiado.getSeller(), fiado.getId(), fiado.getItemName(), true, fiado.getCustomer().getFullName());
+        log.info("Customer fiado {} rejected by admin", id);
     }
 
     @Transactional

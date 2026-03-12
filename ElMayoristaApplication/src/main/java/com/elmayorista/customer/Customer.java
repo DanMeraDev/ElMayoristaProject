@@ -31,6 +31,10 @@ public class Customer {
     @Column(name = "id_number", length = 20)
     private String idNumber;
 
+    /** CEDULA | RUC | PASAPORTE | ID_EXTRANJERO — null para clientes sin documento */
+    @Column(name = "id_type", length = 20)
+    private String idType;
+
     @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 

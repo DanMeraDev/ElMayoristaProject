@@ -57,6 +57,19 @@ public class CustomerFiadoController {
         return ResponseEntity.ok(customerFiadoService.getAllCustomerFiados());
     }
 
+    @PostMapping("/admin/{id}/approve")
+    public ResponseEntity<CustomerFiadoDTO> adminApproveCustomerFiado(@PathVariable Long id) {
+        log.info("Admin approving customer fiado {}", id);
+        return ResponseEntity.ok(customerFiadoService.adminApproveCustomerFiado(id));
+    }
+
+    @PostMapping("/admin/{id}/reject")
+    public ResponseEntity<Void> adminRejectCustomerFiado(@PathVariable Long id) {
+        log.info("Admin rejecting customer fiado {}", id);
+        customerFiadoService.adminRejectCustomerFiado(id);
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/admin/{id}")
     public ResponseEntity<Void> adminDeleteCustomerFiado(@PathVariable Long id) {
         log.info("Admin deleting customer fiado {}", id);

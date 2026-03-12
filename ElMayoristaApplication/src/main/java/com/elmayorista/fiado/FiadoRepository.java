@@ -12,9 +12,9 @@ public interface FiadoRepository extends JpaRepository<Fiado, Long> {
 
     List<Fiado> findBySellerIdOrderByCreatedAtDesc(UUID sellerId);
 
-    List<Fiado> findBySellerAndSettledInCycleFalse(User seller);
+    List<Fiado> findBySellerAndStatusAndSettledInCycleFalse(User seller, FiadoStatus status);
 
-    List<Fiado> findBySettledInCycleFalse();
+    List<Fiado> findByStatusAndSettledInCycleFalse(FiadoStatus status);
 
     List<Fiado> findAllByOrderByCreatedAtDesc();
 }

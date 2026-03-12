@@ -29,11 +29,12 @@ public class CustomerController {
 
         String fullName = request.get("fullName");
         String idNumber = request.get("idNumber");
+        String idType = request.get("idType");
         String phoneNumber = request.get("phoneNumber");
 
-        log.info("Seller {} registering customer: {}", sellerId, fullName);
+        log.info("Seller {} registering customer: {} (idType={})", sellerId, fullName, idType);
 
-        CustomerDTO customer = customerService.registerCustomer(sellerId, fullName, idNumber, phoneNumber);
+        CustomerDTO customer = customerService.registerCustomer(sellerId, fullName, idNumber, idType, phoneNumber);
         return ResponseEntity.ok(customer);
     }
 

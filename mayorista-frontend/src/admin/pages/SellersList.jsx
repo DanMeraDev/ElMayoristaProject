@@ -10,27 +10,23 @@ import {
     MoreVertical,
     Mail,
     Phone,
-    Moon,
-    Sun,
     LayoutDashboard,
     BarChart3,
     Settings,
     RefreshCw,
-
     Eye,
     Ban,
-    Percent
+    Percent,
+    UserCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
 import { getAllSellers, approveSeller, getPendingSellers, getSalesUnderReview, toggleSellerEnabled, updateSellerCommission } from '../../api/admin.api';
 import AdminFooter from '../components/AdminFooter';
 import AdminSidebar from '../components/AdminSidebar';
-import NotificationBell from '../../components/NotificationBell';
+import AdminTopbar from '../components/AdminTopbar';
 
 function SellersList() {
     const { user, logout } = useAuth();
-    const { isDarkMode, toggleDarkMode } = useDarkMode();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -259,30 +255,11 @@ function SellersList() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-4 sm:px-8">
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        {!isSidebarOpen && (
-                            <button
-                                onClick={() => setIsSidebarOpen(true)}
-                                className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400"
-                                title="Mostrar menú"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        )}
-                        <span className="font-medium text-slate-900 dark:text-white">Gestión de Vendedores</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <NotificationBell />
-                        <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
-                        <button
-                            onClick={toggleDarkMode}
-                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                    </div>
-                </header>
+                <AdminTopbar
+                    isSidebarOpen={isSidebarOpen}
+                    onSidebarOpen={() => setIsSidebarOpen(true)}
+                    title="Vendedores"
+                />
 
                 {/* Content */}
                 <div className="p-4 sm:p-8 space-y-6 flex-1 overflow-y-auto">
@@ -405,9 +382,17 @@ function SellersList() {
                                                 </td>
                                                 <td className="py-4 px-6">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
-                                                            {seller.fullName?.charAt(0)?.toUpperCase() || 'V'}
-                                                        </div>
+                                                        {seller.profilePhotoUrl ? (
+                                                            <img
+                                                                src={seller.profilePhotoUrl}
+                                                                alt={seller.fullName}
+                                                                className="w-10 h-10 shrink-0 rounded-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-10 h-10 shrink-0 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
+                                                                {seller.fullName?.charAt(0)?.toUpperCase() || 'V'}
+                                                            </div>
+                                                        )}
                                                         <div>
                                                             <p className="text-sm font-medium text-slate-900 dark:text-white">{seller.fullName}</p>
                                                             <p className="text-xs text-slate-500 dark:text-slate-400">ID: #{seller.id?.substring(0, 8)}</p>
@@ -469,7 +454,17 @@ function SellersList() {
                                                                     className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                                                 >
                                                                     <Eye className="w-4 h-4" />
-                                                                    Ver Detalles
+                                                                    Ver Ventas
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setOpenActionsMenu(null);
+                                                                        navigate(`/admin/profile/${seller.id}`);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                                                >
+                                                                    <UserCircle className="w-4 h-4" />
+                                                                    Ver Perfil
                                                                 </button>
                                                                 <button
                                                                     onClick={(e) => {

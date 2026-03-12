@@ -133,9 +133,9 @@ public class CycleService {
                 .map(sale -> sale.getCommissionAmount() != null ? sale.getCommissionAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Fetch fiados data before generating reports
-        List<Fiado> unsettledEmployeeFiados = fiadoRepository.findBySettledInCycleFalse();
-        List<CustomerFiado> unsettledCustomerFiados = customerFiadoRepository.findBySettledInCycleFalse();
+        // Fetch fiados data before generating reports (solo APPROVED)
+        List<Fiado> unsettledEmployeeFiados = fiadoRepository.findByStatusAndSettledInCycleFalse(FiadoStatus.APPROVED);
+        List<CustomerFiado> unsettledCustomerFiados = customerFiadoRepository.findByStatusAndSettledInCycleFalse(FiadoStatus.APPROVED);
 
         // Filter TV sales from this cycle
         List<Sale> tvSales = sales.stream()
@@ -184,7 +184,7 @@ public class CycleService {
         Map<User, List<Sale>> salesBySellerForFiados = sales.stream()
                 .collect(Collectors.groupingBy(Sale::getSeller));
         for (User seller : salesBySellerForFiados.keySet()) {
-            List<Fiado> sellerFiados = fiadoRepository.findBySellerAndSettledInCycleFalse(seller);
+            List<Fiado> sellerFiados = fiadoRepository.findBySellerAndStatusAndSettledInCycleFalse(seller, FiadoStatus.APPROVED);
             for (Fiado fiado : sellerFiados) {
                 fiado.setStatus(FiadoStatus.SETTLED);
                 fiado.setSettledInCycle(true);
@@ -196,7 +196,7 @@ public class CycleService {
 
             // Settle pending customer fiados for this seller
             List<CustomerFiado> sellerCustomerFiados = customerFiadoRepository
-                    .findBySellerAndSettledInCycleFalse(seller);
+                    .findBySellerAndStatusAndSettledInCycleFalse(seller, FiadoStatus.APPROVED);
             for (CustomerFiado cf : sellerCustomerFiados) {
                 cf.setStatus(FiadoStatus.SETTLED);
                 cf.setSettledInCycle(true);
@@ -338,7 +338,7 @@ public class CycleService {
             // ========== INDIVIDUAL SELLER SHEETS ==========
             for (Map.Entry<User, List<Sale>> entry : salesBySeller.entrySet()) {
                 User seller = entry.getKey();
-                List<Fiado> sellerFiados = fiadoRepository.findBySellerAndSettledInCycleFalse(seller);
+                List<Fiado> sellerFiados = fiadoRepository.findBySellerAndStatusAndSettledInCycleFalse(seller, FiadoStatus.APPROVED);
                 BigDecimal totalFiados = sellerFiados.stream()
                         .map(Fiado::getPrice)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -359,9 +359,16 @@ public class CycleService {
             BigDecimal totalFiados, CellStyle headerStyle, CellStyle currencyStyle,
             CellStyle commissionStyle, CellStyle toReceiveStyle) {
         // Create sheet with seller's name (sanitize for Excel sheet name)
-        String sheetName = seller.getFullName().replaceAll("[\\\\/:*?\"<>|]", "_");
-        if (sheetName.length() > 31) {
-            sheetName = sheetName.substring(0, 31);
+        String baseName = seller.getFullName().replaceAll("[\\\\/:*?\"<>|\\[\\]]", "_").trim();
+        if (baseName.length() > 31) {
+            baseName = baseName.substring(0, 31);
+        }
+        // Ensure unique sheet name
+        String sheetName = baseName;
+        int sheetSuffix = 1;
+        while (workbook.getSheet(sheetName) != null) {
+            String suffix = "_" + sheetSuffix++;
+            sheetName = baseName.substring(0, Math.min(baseName.length(), 31 - suffix.length())) + suffix;
         }
         Sheet sellerSheet = workbook.createSheet(sheetName);
 
@@ -424,7 +431,7 @@ public class CycleService {
             String paymentMethod = "-";
             String documentNumber = "-";
             if (sale.getPayments() != null && !sale.getPayments().isEmpty()) {
-                Payment payment = sale.getPayments().get(sale.getPayments().size() - 1);
+                Payment payment = sale.getPayments().stream().reduce((a, b) -> b).orElse(null);
                 paymentMethod = payment.getPaymentMethod() != null ? payment.getPaymentMethod().toString() : "-";
                 documentNumber = payment.getReceiptUrl() != null ? payment.getReceiptUrl() : "-";
             }

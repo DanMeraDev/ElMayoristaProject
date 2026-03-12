@@ -1,6 +1,7 @@
 package com.elmayorista.payment;
 
 import com.elmayorista.sale.Sale;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -11,6 +12,7 @@ import java.util.List;
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
+    @EntityGraph(attributePaths = {"registeredBy"})
     List<Payment> findBySale(Sale sale);
 
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.sale = :sale")

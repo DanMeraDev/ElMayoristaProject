@@ -65,7 +65,19 @@ public class PdfExtractionService {
                 sale.setShipping(BigDecimal.ZERO);
             }
 
+            // Validate required fields before returning — fail fast with a clear message
+            if (customerName == null || customerName.isBlank()) {
+                throw new IllegalArgumentException(
+                        "El PDF no tiene el formato esperado. No se pudo encontrar el nombre del cliente. Solo se aceptan PDFs generados por Odoo.");
+            }
+            if (amountString == null || sale.getTotal().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException(
+                        "El PDF no tiene el formato esperado. No se pudo encontrar el total. Solo se aceptan PDFs generados por Odoo.");
+            }
+
             return sale;
+        } catch (IllegalArgumentException e) {
+            throw e; // Re-throw validation errors as-is
         } catch (Exception e) {
             throw new IllegalStateException("Error al extraer datos del PDF: " + e.getMessage(), e);
         }

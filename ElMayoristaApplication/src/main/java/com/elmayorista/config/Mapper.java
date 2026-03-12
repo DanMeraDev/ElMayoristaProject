@@ -31,6 +31,11 @@ public class Mapper {
                 .enabled(user.isEnabled())
                 .pendingApproval(user.isPendingApproval())
                 .commissionPercentage(user.getCommissionPercentage())
+                .profilePhotoUrl(user.getProfilePhotoUrl())
+                .coverPhotoUrl(user.getCoverPhotoUrl())
+                .bio(user.getBio())
+                .city(user.getCity())
+                .nickname(user.getNickname())
                 .createdAt(user.getCreatedAt())
                 .build();
     }
@@ -55,6 +60,9 @@ public class Mapper {
 
         BigDecimal totalPaid = paymentRepository.sumAmountBySale(sale);
         BigDecimal remainingAmount = sale.getTotal().subtract(totalPaid);
+
+        // Load payments explicitly from DB to avoid EntityGraph/lazy-loading issues
+        List<Payment> payments = paymentRepository.findBySale(sale);
 
         return SaleDTO.builder()
                 .id(sale.getId())
@@ -83,8 +91,11 @@ public class Mapper {
                 .sellerName(sale.getSeller() != null ? sale.getSeller().getFullName() : null)
                 .sellerEmail(sale.getSeller() != null ? sale.getSeller().getEmail() : null)
                 .products(sale.getDetails().stream().map(this::toSaleDetailDTO).collect(Collectors.toList()))
-                .payments(sale.getPayments().stream().map(this::toPaymentDTO).collect(Collectors.toList()))
+                .payments(payments.stream().map(this::toPaymentDTO).collect(Collectors.toList()))
                 .rejectionReason(sale.getRejectionReason())
+                .returnType(sale.getReturnType())
+                .returnReason(sale.getReturnReason())
+                .returnedAt(sale.getReturnedAt())
                 .commissionSettled(sale.isCommissionSettled())
                 .build();
     }

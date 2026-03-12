@@ -1,8 +1,9 @@
 package com.elmayorista.sale;
 
 import com.elmayorista.config.CacheConfig;
+import com.elmayorista.config.Mapper;
 import com.elmayorista.notification.NotificationService;
-import com.elmayorista.service.FileStorageService;
+import com.elmayorista.payment.PaymentStatus;
 import com.elmayorista.user.User;
 import com.elmayorista.user.UserService;
 import jakarta.persistence.EntityNotFoundException;
@@ -10,11 +11,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -29,6 +29,7 @@ public class SaleService {
     private final SaleRepository saleRepository;
     private final UserService userService;
     private final NotificationService notificationService;
+    private final Mapper mapper;
 
     public BigDecimal calculateCommission(BigDecimal total, BigDecimal percentage) {
         if (percentage == null) {
@@ -44,6 +45,11 @@ public class SaleService {
     })
     @Transactional
     public Sale createSale(Sale sale) {
+        if (sale.getSeller() != null && isSellerBlockedFromNewSales(sale.getSeller())) {
+            throw new IllegalStateException(
+                    "No puedes registrar nuevas ventas hasta que subas el comprobante de todas tus ventas con más de 24 horas pendientes.");
+        }
+
         if (sale.getOrderDate() == null) {
             sale.setOrderDate(LocalDateTime.now());
         }
@@ -73,11 +79,18 @@ public class SaleService {
 
         sale.setStatus(SaleStatus.PENDING);
 
-        return saleRepository.save(sale);
+        Sale saved = saleRepository.save(sale);
+        notificationService.notifyAdminsSaleCreated(saved);
+        return saved;
     }
 
     @Transactional
     public Sale createTvSale(TvSaleCreateDTO dto, User seller) {
+        if (isSellerBlockedFromNewSales(seller)) {
+            throw new IllegalStateException(
+                    "No puedes registrar nuevas ventas hasta que subas el comprobante de todas tus ventas con más de 24 horas pendientes.");
+        }
+
         BigDecimal shipping = dto.getShipping() != null ? dto.getShipping() : BigDecimal.ZERO;
         BigDecimal total = dto.getPrice().add(shipping);
 
@@ -105,9 +118,15 @@ public class SaleService {
                                 : new BigDecimal("5.00"))
                 .build();
 
-        return saleRepository.save(sale);
+        Sale saved = saleRepository.save(sale);
+        notificationService.notifyAdminsSaleCreated(saved);
+        return saved;
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.DASHBOARD_STATS_CACHE, allEntries = true),
+            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, allEntries = true)
+    })
     @Transactional
     public Sale reviewSale(Long id, boolean isApproved, String rejectionReason) {
         Sale sale = getSaleById(id);
@@ -137,6 +156,14 @@ public class SaleService {
 
         // Clear any pending sale reminder notifications
         notificationService.clearNotificationsForSale(sale.getId());
+
+        // Notify seller of the outcome
+        if (isApproved) {
+            notificationService.notifySellerSaleApproved(saved);
+            notificationService.checkAndNotifyRankingAchievement(saved.getSeller());
+        } else {
+            notificationService.notifySellerSaleRejected(saved);
+        }
 
         return saved;
     }
@@ -239,6 +266,29 @@ public class SaleService {
     }
 
     @Transactional(readOnly = true)
+    public SaleDTO getSaleDTOById(Long id) {
+        Sale sale = saleRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Venta no encontrada con ID: " + id));
+        return mapper.toSaleDTO(sale);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SaleDTO> getAllSalesAsDTOs(Pageable pageable) {
+        return saleRepository.findAll(pageable).map(mapper::toSaleDTO);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SaleDTO> getSalesByStatusAsDTOs(SaleStatus status, Pageable pageable) {
+        return saleRepository.findByStatus(status, pageable).map(mapper::toSaleDTO);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SaleDTO> getSalesBySellerAsDTOs(UUID sellerId, Pageable pageable) {
+        User seller = userService.getUserById(sellerId);
+        return saleRepository.findBySeller(seller, pageable).map(mapper::toSaleDTO);
+    }
+
+    @Transactional(readOnly = true)
     public Sale getSaleByOrderNumber(String orderNumber) {
         return saleRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(
@@ -269,6 +319,70 @@ public class SaleService {
      */
     public boolean canModifySale(Sale sale) {
         return sale.getStatus() == SaleStatus.PENDING || sale.getStatus() == SaleStatus.REJECTED;
+    }
+
+    /**
+     * Returns true if the seller has at least one PENDING+UNPAID sale older than 24 hours.
+     * In that case, the seller is blocked from creating new sales.
+     */
+    @Transactional(readOnly = true)
+    public boolean isSellerBlockedFromNewSales(User seller) {
+        LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
+        return saleRepository.existsBySellerAndStatusAndPaymentStatusAndCreatedAtBefore(
+                seller, SaleStatus.PENDING, PaymentStatus.UNPAID, cutoff);
+    }
+
+    /**
+     * Returns the number of overdue PENDING+UNPAID sales (older than 24h) for the seller.
+     */
+    @Transactional(readOnly = true)
+    public long countOverdueSalesForSeller(User seller) {
+        LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
+        return saleRepository.countBySellerAndStatusAndPaymentStatusAndCreatedAtBefore(
+                seller, SaleStatus.PENDING, PaymentStatus.UNPAID, cutoff);
+    }
+
+    /**
+     * Retorna el ranking de los mejores vendedores por ventas aprobadas
+     */
+    @Transactional(readOnly = true)
+    public List<SellerRankingDTO> getTopSellers(int limit) {
+        return saleRepository.findTopSellersByApprovedSales(PageRequest.of(0, limit));
+    }
+
+    /**
+     * Procesa la devolución o cambio de una venta.
+     * Solo se puede procesar si la venta está APPROVED y no ha sido liquidada (commissionSettled=false).
+     */
+    @Caching(evict = {
+            @CacheEvict(value = CacheConfig.DASHBOARD_STATS_CACHE, allEntries = true),
+            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, allEntries = true)
+    })
+    @Transactional
+    public Sale processReturn(Long saleId, ReturnType returnType, String reason) {
+        Sale sale = getSaleById(saleId);
+
+        if (sale.getStatus() != SaleStatus.APPROVED) {
+            throw new IllegalStateException(
+                    "Solo se pueden devolver ventas aprobadas. Estado actual: " + sale.getStatus());
+        }
+        if (sale.isCommissionSettled()) {
+            throw new IllegalStateException(
+                    "Esta venta ya fue liquidada en un cierre de ciclo y no puede ser devuelta.");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Se requiere un motivo para la devolución.");
+        }
+
+        sale.setStatus(SaleStatus.RETURNED);
+        sale.setCommissionAmount(BigDecimal.ZERO);
+        sale.setReturnType(returnType);
+        sale.setReturnReason(reason.trim());
+        sale.setReturnedAt(java.time.LocalDateTime.now());
+
+        Sale saved = saleRepository.save(sale);
+        notificationService.notifySellerSaleReturned(saved);
+        return saved;
     }
 
     /**

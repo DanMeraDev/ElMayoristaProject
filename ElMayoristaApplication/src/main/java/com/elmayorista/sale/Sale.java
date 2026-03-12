@@ -17,8 +17,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "sales")
@@ -40,12 +40,12 @@ public class Sale {
     @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @JsonManagedReference
-    private List<SaleDetail> details = new ArrayList<>();
+    private Set<SaleDetail> details = new HashSet<>();
 
     @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     @JsonManagedReference(value="sale-payments")
-    private List<Payment> payments = new ArrayList<>();
+    private Set<Payment> payments = new HashSet<>();
 
     @Column(unique = true)
     private String orderNumber;
@@ -125,6 +125,16 @@ public class Sale {
     private String reportPdfUrl;
 
     private String rejectionReason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "return_type")
+    private ReturnType returnType;
+
+    @Column(name = "return_reason", columnDefinition = "TEXT")
+    private String returnReason;
+
+    @Column(name = "returned_at")
+    private LocalDateTime returnedAt;
 
     @Builder.Default
     private boolean commissionSettled = false;

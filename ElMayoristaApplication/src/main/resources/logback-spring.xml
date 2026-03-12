@@ -7,6 +7,7 @@
     <!-- Console Appender (always active) -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
+            <charset>UTF-8</charset>
             <pattern>${LOG_PATTERN}</pattern>
         </encoder>
     </appender>
@@ -36,11 +37,11 @@
     <!-- DEV Profile           -->
     <!-- ===================== -->
     <springProfile name="dev">
-        <!-- Show SQL and Hibernate details in dev -->
-        <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
         <logger name="com.elmayorista" level="DEBUG"/>
         <logger name="org.springframework.security" level="INFO"/>
         <logger name="org.springframework.web" level="INFO"/>
+        <logger name="org.springframework.data.web.config.SpringDataJacksonConfiguration" level="ERROR"/>
 
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
@@ -58,6 +59,7 @@
         <logger name="org.springframework.security" level="WARN"/>
         <logger name="org.springframework.web" level="WARN"/>
         <logger name="org.flywaydb" level="INFO"/>
+        <logger name="org.springframework.data.web.config.SpringDataJacksonConfiguration" level="ERROR"/>
 
         <root level="WARN">
             <appender-ref ref="CONSOLE"/>

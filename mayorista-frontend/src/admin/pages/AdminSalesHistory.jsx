@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useDarkMode } from '../../context/DarkModeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Eye,
@@ -8,8 +7,6 @@ import {
     ChevronLeft,
     ChevronRight,
     AlertCircle,
-    Moon,
-    Sun,
     ShoppingBag,
     Search,
     Filter,
@@ -23,17 +20,18 @@ import {
     Mail,
     Monitor,
     Send,
-    Tv
+    Tv,
+    RotateCcw
 } from 'lucide-react';
 import { getAllSales, getSalesUnderReview, notifySeller } from '../../api/admin.api';
+import ReturnModal from '../components/ReturnModal';
 import AdminFooter from '../components/AdminFooter';
 import AdminSidebar from '../components/AdminSidebar';
 import SaleDetailModal from '../../components/SaleDetailModal';
-import NotificationBell from '../../components/NotificationBell';
+import AdminTopbar from '../components/AdminTopbar';
 
 function AdminSalesHistory() {
     const { user } = useAuth();
-    const { isDarkMode, toggleDarkMode } = useDarkMode();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -49,6 +47,9 @@ function AdminSalesHistory() {
     // Sidebar state
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+    // Return modal state
+    const [returnModalSale, setReturnModalSale] = useState(null);
 
     // Notify modal state
     const [notifyModalSale, setNotifyModalSale] = useState(null);
@@ -122,6 +123,7 @@ function AdminSalesHistory() {
             case 'PENDING': return 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900/30';
             case 'UNDER_REVIEW': return 'text-purple-600 bg-purple-100 dark:bg-purple-900/30';
             case 'REJECTED': return 'text-red-600 bg-red-100 dark:bg-red-900/30';
+            case 'RETURNED': return 'text-orange-600 bg-orange-100 dark:bg-orange-900/30';
             default: return 'text-gray-600 bg-gray-100 dark:bg-gray-800';
         }
     };
@@ -132,6 +134,7 @@ function AdminSalesHistory() {
             case 'PENDING': return 'Pendiente';
             case 'UNDER_REVIEW': return 'En Revisión';
             case 'REJECTED': return 'Rechazada';
+            case 'RETURNED': return 'Devuelta';
             default: return status || 'Desconocido';
         }
     };
@@ -168,6 +171,11 @@ function AdminSalesHistory() {
         setEndDate('');
         setMinPrice('');
         setMaxPrice('');
+    };
+
+    const handleReturnSuccess = () => {
+        setReturnModalSale(null);
+        loadSales();
     };
 
     const handleSendNotification = async () => {
@@ -226,30 +234,11 @@ function AdminSalesHistory() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <header className="h-16 bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark flex items-center justify-between px-4 sm:px-8">
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        {!isSidebarOpen && (
-                            <button
-                                onClick={() => setIsSidebarOpen(true)}
-                                className="mr-2 p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-500 dark:text-slate-400"
-                                title="Mostrar menú"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        )}
-                        <span className="font-medium text-slate-900 dark:text-white">Historial de Ventas Global</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <NotificationBell />
-                        <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
-                        <button
-                            onClick={toggleDarkMode}
-                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                    </div>
-                </header>
+                <AdminTopbar
+                    isSidebarOpen={isSidebarOpen}
+                    onSidebarOpen={() => setIsSidebarOpen(true)}
+                    title="Historial de Ventas"
+                />
 
                 {/* Content */}
                 <div className="p-4 sm:p-8 flex-1 overflow-y-auto flex flex-col">
@@ -392,6 +381,9 @@ function AdminSalesHistory() {
                                 <button onClick={() => setStatusFilter('REJECTED')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${statusFilter === 'REJECTED' ? 'bg-red-500 text-white shadow-sm' : 'bg-white dark:bg-slate-800 border border-border-light dark:border-border-dark text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                                     <XCircle className={`w-4 h-4 ${statusFilter === 'REJECTED' ? 'text-white' : 'text-red-500'}`} /> Rechazada
                                 </button>
+                                <button onClick={() => setStatusFilter('RETURNED')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${statusFilter === 'RETURNED' ? 'bg-orange-500 text-white shadow-sm' : 'bg-white dark:bg-slate-800 border border-border-light dark:border-border-dark text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                                    <RotateCcw className={`w-4 h-4 ${statusFilter === 'RETURNED' ? 'text-white' : 'text-orange-500'}`} /> Devuelta
+                                </button>
                             </div>
                         </div>
 
@@ -467,17 +459,28 @@ function AdminSalesHistory() {
                                                     </td>
                                                     <td className="py-4 px-6 text-right">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setNotifyChannel('BOTH');
-                                                                    setNotifySuccess(false);
-                                                                    setNotifyModalSale(sale);
-                                                                }}
-                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-orange-50 dark:hover:bg-orange-900/20 text-slate-700 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 text-xs font-medium rounded-lg transition-all shadow-sm"
-                                                                title="Enviar notificacion al vendedor"
-                                                            >
-                                                                <Bell className="w-3.5 h-3.5" />
-                                                            </button>
+                                                            {sale.status === 'PENDING' && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setNotifyChannel('BOTH');
+                                                                        setNotifySuccess(false);
+                                                                        setNotifyModalSale(sale);
+                                                                    }}
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-orange-50 dark:hover:bg-orange-900/20 text-slate-700 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 text-xs font-medium rounded-lg transition-all shadow-sm"
+                                                                    title="Enviar notificacion al vendedor"
+                                                                >
+                                                                    <Bell className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            )}
+                                                            {sale.status === 'APPROVED' && !sale.commissionSettled && (
+                                                                <button
+                                                                    onClick={() => setReturnModalSale(sale)}
+                                                                    className="p-1.5 text-orange-500 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                                                                    title="Procesar devolución"
+                                                                >
+                                                                    <RotateCcw className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 onClick={() => setSelectedSale(sale)}
                                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg transition-all shadow-sm"
@@ -537,6 +540,15 @@ function AdminSalesHistory() {
                 sale={selectedSale}
                 onClose={() => setSelectedSale(null)}
             />
+
+            {/* Return Modal */}
+            {returnModalSale && (
+                <ReturnModal
+                    sale={returnModalSale}
+                    onClose={() => setReturnModalSale(null)}
+                    onSuccess={handleReturnSuccess}
+                />
+            )}
 
             {/* Notify Seller Modal */}
             {notifyModalSale && (

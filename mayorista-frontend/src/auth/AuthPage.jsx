@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, Phone, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 
 function AuthPage() {
   const { signin, signup, isAuthenticated, isLoading, user, errors: authErrors } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const [isLogin, setIsLogin] = useState(location.pathname === '/login' || location.pathname === '/');
 
@@ -21,18 +22,16 @@ function AuthPage() {
   });
 
   useEffect(() => {
-    const expired = sessionStorage.getItem('sessionExpired');
-    const loginError = sessionStorage.getItem('loginError');
+    const error = searchParams.get('error');
+    const expired = searchParams.get('expired');
 
-    if (loginError) {
-      setLoginErrorMsg(loginError);
-      sessionStorage.removeItem('loginError');
+    if (error === 'disabled') {
+      setLoginErrorMsg('Tu cuenta ha sido deshabilitada. Contacta al administrador.');
     } else if (expired === 'true') {
       setSessionExpiredMsg(true);
-      sessionStorage.removeItem('sessionExpired');
       setTimeout(() => setSessionExpiredMsg(false), 5000);
     }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     if (location.pathname === '/register' && isLogin) {

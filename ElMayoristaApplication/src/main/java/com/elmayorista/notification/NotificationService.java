@@ -1,5 +1,8 @@
 package com.elmayorista.notification;
 
+import com.elmayorista.customer.Customer;
+import com.elmayorista.customer.CustomerFiado;
+import com.elmayorista.fiado.Fiado;
 import com.elmayorista.sale.Sale;
 import com.elmayorista.sale.SaleRepository;
 import com.elmayorista.sale.SaleStatus;
@@ -9,6 +12,8 @@ import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +41,12 @@ public class NotificationService {
                 .limit(50)
                 .map(this::toDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<NotificationDTO> getUserNotificationsPaginated(UUID userId, Pageable pageable) {
+        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+                .map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
@@ -115,6 +126,29 @@ public class NotificationService {
     }
 
     @Transactional
+    public void notifyAdminsSaleCreated(Sale sale) {
+        List<User> admins = userRepository.findByRole(Role.ADMIN);
+        String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
+        String sellerName = sale.getSeller().getFullName();
+        String saleType = sale.getSaleType() != null && sale.getSaleType().name().equals("TV") ? " (TV)" : "";
+
+        for (User admin : admins) {
+            Notification notification = Notification.builder()
+                    .user(admin)
+                    .type(NotificationType.SALE_CREATED)
+                    .title("Nueva venta registrada" + saleType)
+                    .message(sellerName + " registró la venta " + orderNum + ". Total: $" + sale.getTotal().toPlainString())
+                    .referenceId(sale.getId())
+                    .referenceDate(sale.getOrderDate())
+                    .read(false)
+                    .build();
+            notificationRepository.save(notification);
+        }
+
+        log.info("Notified {} admins about new sale {} created by {}", admins.size(), sale.getId(), sellerName);
+    }
+
+    @Transactional
     public void notifyAdminsSaleUnderReview(Sale sale) {
         List<User> admins = userRepository.findByRole(Role.ADMIN);
         String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
@@ -134,6 +168,208 @@ public class NotificationService {
         }
 
         log.info("Notified {} admins about sale {} under review", admins.size(), sale.getId());
+    }
+
+    @Transactional
+    public void notifyAdminsCustomerFiadoCreated(CustomerFiado fiado) {
+        List<User> admins = userRepository.findByRole(Role.ADMIN);
+        String sellerName = fiado.getSeller().getFullName();
+        String customerName = fiado.getCustomer().getFullName();
+
+        for (User admin : admins) {
+            Notification notification = Notification.builder()
+                    .user(admin)
+                    .type(NotificationType.CUSTOMER_FIADO_CREATED)
+                    .title("Nuevo fiado a cliente")
+                    .message("El vendedor " + sellerName + " fió \"" + fiado.getItemName() + "\" por $" + fiado.getPrice().toPlainString() + " al cliente " + customerName)
+                    .referenceId(fiado.getId())
+                    .read(false)
+                    .build();
+            notificationRepository.save(notification);
+        }
+        log.info("Notified {} admins about customer fiado {} by seller {}", admins.size(), fiado.getId(), sellerName);
+    }
+
+    @Transactional
+    public void notifySellerFiadoApproved(User seller, Long fiadoId, String itemName, boolean isCustomerFiado, String customerName) {
+        String context = isCustomerFiado ? " al cliente " + customerName : "";
+        Notification notification = Notification.builder()
+                .user(seller)
+                .type(NotificationType.FIADO_APPROVED)
+                .title("Fiado aprobado")
+                .message("Tu fiado de \"" + itemName + "\"" + context + " fue aprobado.")
+                .referenceId(fiadoId)
+                .read(false)
+                .build();
+        notificationRepository.save(notification);
+        log.info("Notified seller {} that fiado {} was approved", seller.getFullName(), fiadoId);
+    }
+
+    @Transactional
+    public void notifySellerFiadoRejected(User seller, Long fiadoId, String itemName, boolean isCustomerFiado, String customerName) {
+        String context = isCustomerFiado ? " al cliente " + customerName : "";
+        Notification notification = Notification.builder()
+                .user(seller)
+                .type(NotificationType.FIADO_REJECTED)
+                .title("Fiado rechazado")
+                .message("Tu fiado de \"" + itemName + "\"" + context + " fue rechazado por el administrador.")
+                .referenceId(fiadoId)
+                .read(false)
+                .build();
+        notificationRepository.save(notification);
+        log.info("Notified seller {} that fiado {} was rejected", seller.getFullName(), fiadoId);
+    }
+
+    @Transactional
+    public void notifySellerCustomerApproved(Customer customer) {
+        User seller = customer.getRegisteredBy();
+        String idInfo = customer.getIdNumber() != null ? " (" + customer.getIdNumber() + ")" : "";
+
+        Notification notification = Notification.builder()
+                .user(seller)
+                .type(NotificationType.CUSTOMER_APPROVED)
+                .title("Cliente aprobado")
+                .message("Tu cliente " + customer.getFullName() + idInfo + " fue aprobado. Ya puedes fiarle.")
+                .referenceId(customer.getId())
+                .read(false)
+                .build();
+        notificationRepository.save(notification);
+
+        log.info("Notified seller {} that customer {} was approved", seller.getFullName(), customer.getId());
+    }
+
+    @Transactional
+    public void notifyAdminsCustomerRegistered(Customer customer) {
+        List<User> admins = userRepository.findByRole(Role.ADMIN);
+        String sellerName = customer.getRegisteredBy().getFullName();
+        String idInfo = customer.getIdNumber() != null ? " (" + customer.getIdNumber() + ")" : "";
+
+        for (User admin : admins) {
+            Notification notification = Notification.builder()
+                    .user(admin)
+                    .type(NotificationType.CUSTOMER_REGISTERED)
+                    .title("Nuevo cliente por aprobar")
+                    .message("El vendedor " + sellerName + " registró al cliente: " + customer.getFullName() + idInfo)
+                    .referenceId(customer.getId())
+                    .read(false)
+                    .build();
+            notificationRepository.save(notification);
+        }
+
+        log.info("Notified {} admins about new customer {} by seller {}", admins.size(), customer.getId(), sellerName);
+    }
+
+    @Transactional
+    public void notifySellerSaleApproved(Sale sale) {
+        User seller = sale.getSeller();
+        String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
+        Notification notification = Notification.builder()
+                .user(seller)
+                .type(NotificationType.SALE_APPROVED)
+                .title("Venta aprobada")
+                .message("Tu venta " + orderNum + " fue aprobada por el administrador. Total: $" + sale.getTotal().toPlainString())
+                .referenceId(sale.getId())
+                .referenceDate(sale.getOrderDate())
+                .read(false)
+                .build();
+        notificationRepository.save(notification);
+        log.info("Notified seller {} that sale {} was approved", seller.getFullName(), sale.getId());
+    }
+
+    @Transactional
+    public void notifySellerSaleRejected(Sale sale) {
+        User seller = sale.getSeller();
+        String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
+        String reason = sale.getRejectionReason() != null ? " Motivo: " + sale.getRejectionReason() : "";
+        Notification notification = Notification.builder()
+                .user(seller)
+                .type(NotificationType.SALE_REJECTED)
+                .title("Venta rechazada")
+                .message("Tu venta " + orderNum + " fue rechazada." + reason)
+                .referenceId(sale.getId())
+                .referenceDate(sale.getOrderDate())
+                .read(false)
+                .build();
+        notificationRepository.save(notification);
+        log.info("Notified seller {} that sale {} was rejected", seller.getFullName(), sale.getId());
+    }
+
+    @Transactional
+    public void notifySellerSaleReturned(Sale sale) {
+        User seller = sale.getSeller();
+        String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
+        String typeLabel = sale.getReturnType() == com.elmayorista.sale.ReturnType.REFUND ? "reembolso" : "cambio";
+        String reason = sale.getReturnReason() != null ? " Motivo: " + sale.getReturnReason() : "";
+        Notification notification = Notification.builder()
+                .user(seller)
+                .type(NotificationType.SALE_RETURNED)
+                .title("Venta devuelta (" + typeLabel + ")")
+                .message("Tu venta " + orderNum + " fue procesada como " + typeLabel + "." + reason)
+                .referenceId(sale.getId())
+                .referenceDate(sale.getOrderDate())
+                .read(false)
+                .build();
+        notificationRepository.save(notification);
+        log.info("Notified seller {} that sale {} was returned ({})", seller.getFullName(), sale.getId(), typeLabel);
+    }
+
+    /**
+     * Checks the seller's ranking position after a sale is approved.
+     * If they've reached top 1, 2, or 3 — sends a one-time achievement notification.
+     */
+    @Transactional
+    public void checkAndNotifyRankingAchievement(User seller) {
+        var ranking = saleRepository.findTopSellersByApprovedSales(
+                org.springframework.data.domain.PageRequest.of(0, 3));
+
+        int position = 0;
+        for (int i = 0; i < ranking.size(); i++) {
+            if (ranking.get(i).getSellerId().equals(seller.getId())) {
+                position = i + 1;
+                break;
+            }
+        }
+
+        if (position < 1 || position > 3) return;
+
+        // Check if we already sent a notification for this exact position
+        Optional<Notification> existing = notificationRepository.findByUserIdAndReferenceIdAndType(
+                seller.getId(), (long) position, NotificationType.RANKING_ACHIEVEMENT);
+        if (existing.isPresent()) return;
+
+        String[] posLabels = {"", "1er", "2do", "3er"};
+        String[] emojis = {"", "🥇", "🥈", "🥉"};
+
+        Notification notification = Notification.builder()
+                .user(seller)
+                .type(NotificationType.RANKING_ACHIEVEMENT)
+                .title(emojis[position] + " ¡Top " + position + " alcanzado!")
+                .message("¡Felicidades! Has alcanzado el " + posLabels[position] + " lugar en el ranking de vendedores.")
+                .referenceId((long) position)
+                .read(false)
+                .build();
+        notificationRepository.save(notification);
+        log.info("Notified seller {} about reaching ranking position #{}", seller.getFullName(), position);
+    }
+
+    @Transactional
+    public void notifyAdminsFiadoCreated(Fiado fiado) {
+        List<User> admins = userRepository.findByRole(Role.ADMIN);
+        String sellerName = fiado.getSeller().getFullName();
+
+        for (User admin : admins) {
+            Notification notification = Notification.builder()
+                    .user(admin)
+                    .type(NotificationType.FIADO_CREATED)
+                    .title("Nuevo fiado creado")
+                    .message("El vendedor " + sellerName + " registró un fiado: \"" + fiado.getItemName() + "\" por $" + fiado.getPrice().toPlainString())
+                    .referenceId(fiado.getId())
+                    .read(false)
+                    .build();
+            notificationRepository.save(notification);
+        }
+
+        log.info("Notified {} admins about new fiado {} by seller {}", admins.size(), fiado.getId(), sellerName);
     }
 
     @Transactional

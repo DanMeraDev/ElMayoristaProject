@@ -78,8 +78,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private void sendTooManyRequests(HttpServletResponse response) throws IOException {
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setHeader("Retry-After", "60");
         response.getWriter().write(
-                "{\"status\":429,\"error\":\"Too Many Requests\",\"message\":\"Demasiadas solicitudes. Intenta de nuevo en un momento.\"}"
+                "{\"status\":429,\"error\":\"Too Many Requests\",\"message\":\"Demasiadas solicitudes. Por favor espera un momento antes de continuar.\"}"
         );
     }
 

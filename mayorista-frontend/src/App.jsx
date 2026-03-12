@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { DarkModeProvider } from './context/DarkModeContext';
 import { AppRouter } from './router/AppRouter';
 import ErrorBoundary from './components/ErrorBoundary';
+import RateLimitToast from './components/RateLimitToast';
 import './App.css'; // Keep existing styles if any
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
         <AuthProvider>
           <BrowserRouter>
             <AppRouter />
+            <RateLimitToast />
           </BrowserRouter>
         </AuthProvider>
       </DarkModeProvider>
