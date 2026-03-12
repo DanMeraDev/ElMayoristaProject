@@ -30,9 +30,11 @@ public class NotificationController {
 
     @GetMapping("/history")
     public ResponseEntity<Page<NotificationDTO>> getNotificationsHistory(
-            Authentication authentication, Pageable pageable) {
+            Authentication authentication,
+            @RequestParam(required = false) Boolean read,
+            Pageable pageable) {
         UUID userId = getUserId(authentication);
-        return ResponseEntity.ok(notificationService.getUserNotificationsPaginated(userId, pageable));
+        return ResponseEntity.ok(notificationService.getUserNotificationsPaginated(userId, read, pageable));
     }
 
     @GetMapping("/unread-count")

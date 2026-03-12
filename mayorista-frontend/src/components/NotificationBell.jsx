@@ -49,11 +49,11 @@ function NotificationBell() {
         };
 
         fetchCount();
-        const interval = setInterval(fetchCount, 10000);
+        const interval = setInterval(fetchCount, 30000);
         return () => clearInterval(interval);
     }, [user]);
 
-    // Cuando el dropdown está abierto, refrescar la lista cada 10 segundos
+    // Cuando el dropdown está abierto, refrescar la lista cada 30 segundos
     useEffect(() => {
         if (!isOpen) return;
 
@@ -66,7 +66,7 @@ function NotificationBell() {
             }
         };
 
-        const interval = setInterval(refreshList, 10000);
+        const interval = setInterval(refreshList, 30000);
         return () => clearInterval(interval);
     }, [isOpen]);
 

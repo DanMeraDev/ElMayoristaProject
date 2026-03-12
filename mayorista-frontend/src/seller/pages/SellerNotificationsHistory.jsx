@@ -82,10 +82,10 @@ function SellerNotificationsHistory() {
 
     const PAGE_SIZE = 20;
 
-    const loadHistory = useCallback(async (p = 0) => {
+    const loadHistory = useCallback(async (p = 0, filter = filterRead) => {
         setLoading(true);
         try {
-            const res = await getNotificationHistory(p, PAGE_SIZE);
+            const res = await getNotificationHistory(p, PAGE_SIZE, filter === 'all' ? null : filter);
             const data = res.data;
             setNotifications(data.content);
             setTotalPages(data.totalPages);
@@ -96,11 +96,11 @@ function SellerNotificationsHistory() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [filterRead]);
 
     useEffect(() => {
-        loadHistory(0);
-    }, [loadHistory]);
+        loadHistory(0, filterRead);
+    }, [filterRead]);
 
     const handleMarkAsRead = async (notification) => {
         if (notification.read) return;
@@ -132,12 +132,7 @@ function SellerNotificationsHistory() {
         else navigate('/seller/ventas');
     };
 
-    const filteredNotifications = notifications.filter(n => {
-        if (filterRead === 'unread') return !n.read;
-        if (filterRead === 'read') return n.read;
-        return true;
-    });
-
+    const filteredNotifications = notifications;
     const unreadCount = notifications.filter(n => !n.read).length;
 
     const handleLogout = () => {

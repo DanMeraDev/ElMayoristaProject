@@ -13,6 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Rate limiting filter for authentication endpoints.
@@ -28,8 +29,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final int GENERAL_MAX_REQUESTS = 100;
     private static final long GENERAL_WINDOW_MS = 60_000;
 
+    private static final long CLEANUP_INTERVAL_MS = 120_000; // cleanup every 2 minutes
+
     private final ConcurrentHashMap<String, RateBucket> authBuckets = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, RateBucket> generalBuckets = new ConcurrentHashMap<>();
+    private final AtomicLong lastCleanup = new AtomicLong(System.currentTimeMillis());
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -60,9 +64,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
                               int maxRequests, long windowMs) {
         long now = System.currentTimeMillis();
 
-        // Cleanup old entries periodically (every 1000 checks)
-        if (now % 1000 == 0) {
-            buckets.entrySet().removeIf(e -> now - e.getValue().windowStart > windowMs * 2);
+        // Cleanup old entries every 2 minutes
+        long last = lastCleanup.get();
+        if (now - last > CLEANUP_INTERVAL_MS && lastCleanup.compareAndSet(last, now)) {
+            authBuckets.entrySet().removeIf(e -> now - e.getValue().windowStart > AUTH_WINDOW_MS * 2);
+            generalBuckets.entrySet().removeIf(e -> now - e.getValue().windowStart > GENERAL_WINDOW_MS * 2);
         }
 
         RateBucket bucket = buckets.compute(key, (k, existing) -> {

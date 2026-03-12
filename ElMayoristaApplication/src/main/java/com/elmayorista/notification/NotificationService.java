@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,15 +37,18 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public List<NotificationDTO> getUserNotifications(UUID userId) {
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
+        return notificationRepository.findTop50ByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
-                .limit(50)
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public Page<NotificationDTO> getUserNotificationsPaginated(UUID userId, Pageable pageable) {
+    public Page<NotificationDTO> getUserNotificationsPaginated(UUID userId, Boolean read, Pageable pageable) {
+        if (read != null) {
+            return notificationRepository.findByUserIdAndReadOrderByCreatedAtDesc(userId, read, pageable)
+                    .map(this::toDTO);
+        }
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
                 .map(this::toDTO);
     }
@@ -132,8 +136,9 @@ public class NotificationService {
         String sellerName = sale.getSeller().getFullName();
         String saleType = sale.getSaleType() != null && sale.getSaleType().name().equals("TV") ? " (TV)" : "";
 
+        List<Notification> notifications = new ArrayList<>();
         for (User admin : admins) {
-            Notification notification = Notification.builder()
+            notifications.add(Notification.builder()
                     .user(admin)
                     .type(NotificationType.SALE_CREATED)
                     .title("Nueva venta registrada" + saleType)
@@ -141,9 +146,9 @@ public class NotificationService {
                     .referenceId(sale.getId())
                     .referenceDate(sale.getOrderDate())
                     .read(false)
-                    .build();
-            notificationRepository.save(notification);
+                    .build());
         }
+        notificationRepository.saveAll(notifications);
 
         log.info("Notified {} admins about new sale {} created by {}", admins.size(), sale.getId(), sellerName);
     }
@@ -154,8 +159,9 @@ public class NotificationService {
         String orderNum = sale.getOrderNumber() != null ? sale.getOrderNumber() : "#" + sale.getId();
         String sellerName = sale.getSeller().getFullName();
 
+        List<Notification> notifications = new ArrayList<>();
         for (User admin : admins) {
-            Notification notification = Notification.builder()
+            notifications.add(Notification.builder()
                     .user(admin)
                     .type(NotificationType.SALE_UNDER_REVIEW)
                     .title("Venta pendiente de revision")
@@ -163,9 +169,9 @@ public class NotificationService {
                     .referenceId(sale.getId())
                     .referenceDate(sale.getOrderDate())
                     .read(false)
-                    .build();
-            notificationRepository.save(notification);
+                    .build());
         }
+        notificationRepository.saveAll(notifications);
 
         log.info("Notified {} admins about sale {} under review", admins.size(), sale.getId());
     }
@@ -176,17 +182,18 @@ public class NotificationService {
         String sellerName = fiado.getSeller().getFullName();
         String customerName = fiado.getCustomer().getFullName();
 
+        List<Notification> notifications = new ArrayList<>();
         for (User admin : admins) {
-            Notification notification = Notification.builder()
+            notifications.add(Notification.builder()
                     .user(admin)
                     .type(NotificationType.CUSTOMER_FIADO_CREATED)
                     .title("Nuevo fiado a cliente")
                     .message("El vendedor " + sellerName + " fió \"" + fiado.getItemName() + "\" por $" + fiado.getPrice().toPlainString() + " al cliente " + customerName)
                     .referenceId(fiado.getId())
                     .read(false)
-                    .build();
-            notificationRepository.save(notification);
+                    .build());
         }
+        notificationRepository.saveAll(notifications);
         log.info("Notified {} admins about customer fiado {} by seller {}", admins.size(), fiado.getId(), sellerName);
     }
 
@@ -244,17 +251,18 @@ public class NotificationService {
         String sellerName = customer.getRegisteredBy().getFullName();
         String idInfo = customer.getIdNumber() != null ? " (" + customer.getIdNumber() + ")" : "";
 
+        List<Notification> notifications = new ArrayList<>();
         for (User admin : admins) {
-            Notification notification = Notification.builder()
+            notifications.add(Notification.builder()
                     .user(admin)
                     .type(NotificationType.CUSTOMER_REGISTERED)
                     .title("Nuevo cliente por aprobar")
                     .message("El vendedor " + sellerName + " registró al cliente: " + customer.getFullName() + idInfo)
                     .referenceId(customer.getId())
                     .read(false)
-                    .build();
-            notificationRepository.save(notification);
+                    .build());
         }
+        notificationRepository.saveAll(notifications);
 
         log.info("Notified {} admins about new customer {} by seller {}", admins.size(), customer.getId(), sellerName);
     }
@@ -357,17 +365,18 @@ public class NotificationService {
         List<User> admins = userRepository.findByRole(Role.ADMIN);
         String sellerName = fiado.getSeller().getFullName();
 
+        List<Notification> notifications = new ArrayList<>();
         for (User admin : admins) {
-            Notification notification = Notification.builder()
+            notifications.add(Notification.builder()
                     .user(admin)
                     .type(NotificationType.FIADO_CREATED)
                     .title("Nuevo fiado creado")
                     .message("El vendedor " + sellerName + " registró un fiado: \"" + fiado.getItemName() + "\" por $" + fiado.getPrice().toPlainString())
                     .referenceId(fiado.getId())
                     .read(false)
-                    .build();
-            notificationRepository.save(notification);
+                    .build());
         }
+        notificationRepository.saveAll(notifications);
 
         log.info("Notified {} admins about new fiado {} by seller {}", admins.size(), fiado.getId(), sellerName);
     }
