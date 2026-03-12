@@ -12,6 +12,9 @@ import com.elmayorista.user.User;
 import com.elmayorista.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.elmayorista.config.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -54,11 +57,13 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.UNREAD_COUNT_CACHE, key = "#userId")
     public long getUnreadCount(UUID userId) {
         return notificationRepository.countByUserIdAndReadFalse(userId);
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.UNREAD_COUNT_CACHE, key = "#userId")
     public void markAsRead(Long notificationId, UUID userId) {
         Notification notification = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Notificacion no encontrada"));
@@ -72,6 +77,7 @@ public class NotificationService {
     }
 
     @Transactional
+    @CacheEvict(value = CacheConfig.UNREAD_COUNT_CACHE, key = "#userId")
     public void markAllAsRead(UUID userId) {
         notificationRepository.markAllReadByUserId(userId);
     }

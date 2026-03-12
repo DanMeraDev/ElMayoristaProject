@@ -9,6 +9,7 @@ import com.elmayorista.user.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -125,7 +126,8 @@ public class SaleService {
 
     @Caching(evict = {
             @CacheEvict(value = CacheConfig.DASHBOARD_STATS_CACHE, allEntries = true),
-            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, allEntries = true)
+            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, allEntries = true),
+            @CacheEvict(value = CacheConfig.RANKING_CACHE, allEntries = true)
     })
     @Transactional
     public Sale reviewSale(Long id, boolean isApproved, String rejectionReason) {
@@ -346,6 +348,7 @@ public class SaleService {
      * Retorna el ranking de los mejores vendedores por ventas aprobadas
      */
     @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.RANKING_CACHE, key = "#limit")
     public List<SellerRankingDTO> getTopSellers(int limit) {
         return saleRepository.findTopSellersByApprovedSales(PageRequest.of(0, limit));
     }
@@ -356,7 +359,8 @@ public class SaleService {
      */
     @Caching(evict = {
             @CacheEvict(value = CacheConfig.DASHBOARD_STATS_CACHE, allEntries = true),
-            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, allEntries = true)
+            @CacheEvict(value = CacheConfig.COMMISSION_STATS_CACHE, allEntries = true),
+            @CacheEvict(value = CacheConfig.RANKING_CACHE, allEntries = true)
     })
     @Transactional
     public Sale processReturn(Long saleId, ReturnType returnType, String reason) {

@@ -4,36 +4,33 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
+import java.time.Duration;
 
 /**
- * Rate limiting filter for authentication endpoints.
- * Uses a simple token bucket per IP address.
+ * Rate limiting filter using Redis for reliable, distributed rate limiting.
+ * Uses a simple counter per IP with TTL-based window expiration.
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final int AUTH_MAX_REQUESTS = 10;
-    private static final long AUTH_WINDOW_MS = 60_000; // 1 minute
+    private static final Duration AUTH_WINDOW = Duration.ofMinutes(1);
 
     private static final int GENERAL_MAX_REQUESTS = 100;
-    private static final long GENERAL_WINDOW_MS = 60_000;
+    private static final Duration GENERAL_WINDOW = Duration.ofMinutes(1);
 
-    private static final long CLEANUP_INTERVAL_MS = 120_000; // cleanup every 2 minutes
-
-    private final ConcurrentHashMap<String, RateBucket> authBuckets = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, RateBucket> generalBuckets = new ConcurrentHashMap<>();
-    private final AtomicLong lastCleanup = new AtomicLong(System.currentTimeMillis());
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -44,13 +41,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         boolean isAuthEndpoint = path.startsWith("/api/auth/");
 
         if (isAuthEndpoint) {
-            if (!checkRate(authBuckets, clientIp, AUTH_MAX_REQUESTS, AUTH_WINDOW_MS)) {
+            if (!checkRate("rate:auth:" + clientIp, AUTH_MAX_REQUESTS, AUTH_WINDOW)) {
                 log.warn("Rate limit exceeded for auth endpoint from IP: {}", clientIp);
                 sendTooManyRequests(response);
                 return;
             }
         } else if (path.startsWith("/api/")) {
-            if (!checkRate(generalBuckets, clientIp, GENERAL_MAX_REQUESTS, GENERAL_WINDOW_MS)) {
+            if (!checkRate("rate:api:" + clientIp, GENERAL_MAX_REQUESTS, GENERAL_WINDOW)) {
                 log.warn("Rate limit exceeded for API from IP: {}", clientIp);
                 sendTooManyRequests(response);
                 return;
@@ -60,25 +57,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean checkRate(ConcurrentHashMap<String, RateBucket> buckets, String key,
-                              int maxRequests, long windowMs) {
-        long now = System.currentTimeMillis();
-
-        // Cleanup old entries every 2 minutes
-        long last = lastCleanup.get();
-        if (now - last > CLEANUP_INTERVAL_MS && lastCleanup.compareAndSet(last, now)) {
-            authBuckets.entrySet().removeIf(e -> now - e.getValue().windowStart > AUTH_WINDOW_MS * 2);
-            generalBuckets.entrySet().removeIf(e -> now - e.getValue().windowStart > GENERAL_WINDOW_MS * 2);
+    private boolean checkRate(String key, int maxRequests, Duration window) {
+        Long count = redisTemplate.opsForValue().increment(key);
+        if (count != null && count == 1) {
+            redisTemplate.expire(key, window);
         }
-
-        RateBucket bucket = buckets.compute(key, (k, existing) -> {
-            if (existing == null || now - existing.windowStart > windowMs) {
-                return new RateBucket(now);
-            }
-            return existing;
-        });
-
-        return bucket.count.incrementAndGet() <= maxRequests;
+        return count != null && count <= maxRequests;
     }
 
     private void sendTooManyRequests(HttpServletResponse response) throws IOException {
@@ -96,15 +80,5 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
-    }
-
-    private static class RateBucket {
-        final long windowStart;
-        final AtomicInteger count;
-
-        RateBucket(long windowStart) {
-            this.windowStart = windowStart;
-            this.count = new AtomicInteger(0);
-        }
     }
 }

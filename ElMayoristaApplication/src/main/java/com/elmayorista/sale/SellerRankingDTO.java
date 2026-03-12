@@ -8,6 +8,7 @@ import java.util.UUID;
 
 @Data
 @AllArgsConstructor
+@lombok.NoArgsConstructor
 public class SellerRankingDTO {
     private UUID sellerId;
     private String sellerName;
